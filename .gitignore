@@ -103,3 +103,9 @@ docs/_pdf_build/
 *.tmp
 *.old
 backup/
+
+# ============ Claude Code ============
+.claude/settings.local.json
+
+# ============ WSL/Windows ADS ============
+*:Zone.Identifier
