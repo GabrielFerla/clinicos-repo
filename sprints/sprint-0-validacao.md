@@ -46,8 +46,8 @@ A maior parte dos projetos que falham descobrem incompatibilidades técnicas tar
 
 ### Checkpoint 5: Django Admin com django-unfold
 - [x] **S0-19** Instalar `django-unfold` e configurar tema · **FRONT** · 1h
-- [ ] **S0-20** Cadastrar Paciente via Admin, validar visual moderno · **FRONT** · 0.5h
-- [ ] **S0-21** Decisão registrada: Django Admin é suficiente para o CRM? · **FRONT+DESIGN** · 0.5h
+- [x] **S0-20** Cadastrar Paciente via Admin, validar visual moderno · **FRONT** · 0.5h
+- [x] **S0-21** Decisão registrada: Django Admin é suficiente para o CRM? · **FRONT+DESIGN** · 0.5h
 
 ### Checkpoint 6: Chat HTMX com streaming
 - [x] **S0-22** Configurar HTMX e Alpine.js no template Django · **FRONT** · 1h
