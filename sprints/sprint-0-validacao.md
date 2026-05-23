@@ -19,44 +19,44 @@ A maior parte dos projetos que falham descobrem incompatibilidades técnicas tar
 ## Tarefas
 
 ### Checkpoint 1: Oracle 23ai Free no Docker
-- [ ] **S0-1** Subir container Oracle 23ai Free via Docker · **DEVOPS** · 2h
-- [ ] **S0-2** Conectar com DBeaver e validar `SELECT 'hello' FROM dual` · **DEVOPS** · 1h
-- [ ] **S0-3** Criar tabela teste, inserir 100 linhas, validar persistência · **DEVOPS** · 1h
+- [x] **S0-1** Subir container Oracle 23ai Free via Docker · **DEVOPS** · 2h
+- [x] **S0-2** Conectar com DBeaver e validar `SELECT 'hello' FROM dual` · **DEVOPS** · 1h
+- [x] **S0-3** Criar tabela teste, inserir 100 linhas, validar persistência · **DEVOPS** · 1h
 
 ### Checkpoint 2: Django + Oracle
-- [ ] **S0-4** Criar projeto Django mínimo · **BACK** · 1h
-- [ ] **S0-5** Instalar e configurar `python-oracledb` em thin mode · **BACK** · 1h
-- [ ] **S0-6** Configurar `DATABASES` no settings apontando para Oracle 23ai · **BACK** · 1h
-- [ ] **S0-7** Criar model `PacienteSpike` com `CharField`, `IntegerField`, `DateTimeField` · **BACK** · 0.5h
-- [ ] **S0-8** Rodar `makemigrations` + `migrate` e validar tabela no Oracle via DBeaver · **BACK** · 1h
-- [ ] **S0-9** Criar paciente via shell Django, validar UTF-8 com caractere acentuado · **BACK** · 0.5h
+- [x] **S0-4** Criar projeto Django mínimo · **BACK** · 1h
+- [x] **S0-5** Instalar e configurar `python-oracledb` em thin mode · **BACK** · 1h
+- [x] **S0-6** Configurar `DATABASES` no settings apontando para Oracle 23ai · **BACK** · 1h
+- [x] **S0-7** Criar model `PacienteSpike` com `CharField`, `IntegerField`, `DateTimeField` · **BACK** · 0.5h
+- [x] **S0-8** Rodar `makemigrations` + `migrate` e validar tabela no Oracle via DBeaver · **BACK** · 1h
+- [x] **S0-9** Criar paciente via shell Django, validar UTF-8 com caractere acentuado · **BACK** · 0.5h
 
 ### Checkpoint 3: Vector Search no Oracle 23ai
-- [ ] **S0-10** Criar tabela `FAQ_SPIKE` com coluna `VECTOR(1024, FLOAT32)` · **DB** · 1h
-- [ ] **S0-11** Escolher provedor de embedding (preliminar) — testar 1, 2 ou 3 opções · **AI** · 3h
-- [ ] **S0-12** Gerar embeddings de 10 FAQs e inserir no Oracle via Python · **AI+DB** · 2h
-- [ ] **S0-13** Executar `VECTOR_DISTANCE` com query "Quanto custa?" e validar resultado · **AI+DB** · 1h
-- [ ] **S0-14** Criar índice HNSW e medir ganho de performance · **DB** · 1h
+- [x] **S0-10** Criar tabela `FAQ_SPIKE` com coluna `VECTOR(1024, FLOAT32)` · **DB** · 1h
+- [x] **S0-11** Escolher provedor de embedding (preliminar) — testar 1, 2 ou 3 opções · **AI** · 3h
+- [x] **S0-12** Gerar embeddings de 10 FAQs e inserir no Oracle via Python · **AI+DB** · 2h
+- [x] **S0-13** Executar `VECTOR_DISTANCE` com query "Quanto custa?" e validar resultado · **AI+DB** · 1h
+- [x] **S0-14** Criar índice HNSW e medir ganho de performance · **DB** · 1h
 
 ### Checkpoint 4: Claude API com Tool Use
-- [ ] **S0-15** Instalar `anthropic` SDK Python · **AI** · 0.5h
-- [ ] **S0-16** Implementar tool `buscar_horarios_disponiveis` que consulta Oracle · **AI+BACK** · 3h
-- [ ] **S0-17** Conversar com Claude no terminal, validar grounding · **AI** · 1h
-- [ ] **S0-18** Testar caso adversarial: perguntar por especialidade que não existe · **AI** · 0.5h
+- [x] **S0-15** Instalar `anthropic` SDK Python · **AI** · 0.5h
+- [x] **S0-16** Implementar tool `buscar_horarios_disponiveis` que consulta Oracle · **AI+BACK** · 3h
+- [x] **S0-17** Conversar com Claude no terminal, validar grounding · **AI** · 1h
+- [x] **S0-18** Testar caso adversarial: perguntar por especialidade que não existe · **AI** · 0.5h
 
 ### Checkpoint 5: Django Admin com django-unfold
-- [ ] **S0-19** Instalar `django-unfold` e configurar tema · **FRONT** · 1h
+- [x] **S0-19** Instalar `django-unfold` e configurar tema · **FRONT** · 1h
 - [ ] **S0-20** Cadastrar Paciente via Admin, validar visual moderno · **FRONT** · 0.5h
 - [ ] **S0-21** Decisão registrada: Django Admin é suficiente para o CRM? · **FRONT+DESIGN** · 0.5h
 
 ### Checkpoint 6: Chat HTMX com streaming
-- [ ] **S0-22** Configurar HTMX e Alpine.js no template Django · **FRONT** · 1h
-- [ ] **S0-23** View Django retornando SSE de mensagem teste (sem IA) · **FRONT+BACK** · 2h
-- [ ] **S0-24** Integrar com Claude API streaming, mostrar tokens chegando ao navegador · **FRONT+AI** · 2h
+- [x] **S0-22** Configurar HTMX e Alpine.js no template Django · **FRONT** · 1h
+- [x] **S0-23** View Django retornando SSE de mensagem teste (sem IA) · **FRONT+BACK** · 2h
+- [x] **S0-24** Integrar com Claude API streaming, mostrar tokens chegando ao navegador · **FRONT+AI** · 2h
 
 ### Documentação e decisões
-- [ ] **S0-25** Atualizar `ADR-0004` com a decisão final sobre embeddings · **AI** · 1h
-- [ ] **S0-26** Criar README em cada pasta de checkpoint do `clinicos-spike` · **TODOS** · 1h
+- [x] **S0-25** Atualizar `ADR-0004` com a decisão final sobre embeddings · **AI** · 1h
+- [x] **S0-26** Criar README em cada pasta de checkpoint do `clinicos-spike` · **TODOS** · 1h
 - [ ] **S0-27** Apresentar resultados para orientador e patrocinador (informal) · **TODOS** · 1h
 
 ---
