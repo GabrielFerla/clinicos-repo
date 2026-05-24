@@ -1,0 +1,15 @@
+{% load static tailwind_tags %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ClinicOS{% endblock %}</title>
+  {% tailwind_css %}
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased">
+  {% block content %}{% endblock %}
+  {% block extra_body %}{% endblock %}
+</body>
+</html>

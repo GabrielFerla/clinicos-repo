@@ -79,6 +79,8 @@ yarn-error.log*
 
 # ============ Tailwind output ============
 static/css/dist.css
+apps/theme/static_src/node_modules/
+apps/theme/static/css/dist/
 
 # ============ Docker ============
 .docker/

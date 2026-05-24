@@ -6,18 +6,25 @@ Herda tudo de ``base.py`` e otimiza para rapidez:
 - Email em memória (``locmem``) — testes podem inspecionar ``mail.outbox``.
 - Celery síncrono (``CELERY_TASK_ALWAYS_EAGER``) — tasks rodam inline na
   mesma thread do teste.
+- **Banco SQLite em memória** — CI roda sem Oracle (ver decisão abaixo).
 
 Cadeia de herança: ``base.py`` → ``test.py``.
 Selecione com ``DJANGO_SETTINGS_MODULE=config.settings.test`` (configurado em
-``pyproject.toml`` / ``pytest.ini`` quando S1-24 ativar CI).
+``pyproject.toml`` / ``pytest.ini`` — vide S1-24).
 
-TODO: hoje os testes ainda apontam para o Oracle definido em ``base.py``.
-Avaliar:
-- usar um schema/PDB de teste separado (ex.: ``FREEPDB1_TEST``), ou
-- trocar ``DATABASES`` para SQLite aqui dentro caso os testes não dependam de
-  features específicas do Oracle (PL/SQL, HNSW, etc.). Como o domínio tem
-  triggers PL/SQL (S1-10) e índice HNSW (S1-12), SQLite *não* serve para a
-  suíte completa. Decisão fica para a sprint de QA.
+Por que SQLite? (S1-24)
+-----------------------
+Subir Oracle 23ai como service container no GitHub Actions é caro: a imagem
+oficial passa de 8GB, o healthcheck é lento e instável, e a maioria dos testes
+unitários da Sprint 1 não toca em PL/SQL nem em vetores. SQLite em memória
+serve para validar lógica de domínio em milissegundos.
+
+Testes de integração que dependem de features específicas do Oracle
+(trigger PL/SQL de imutabilidade — S1-10; constraint UNIQUE de slot — S1-11;
+índice HNSW em ``FAQ_VECTOR.EMBEDDING`` — S1-12) deverão ser marcados com
+``@pytest.mark.oracle`` e rodam apenas em ambiente local/staging com Oracle.
+O CI ignora esses marcadores via ``-m "not oracle"`` quando essa suíte existir
+(decisão fica para a sprint de QA quando os testes Oracle aparecerem).
 """
 
 from __future__ import annotations
@@ -35,3 +42,17 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 # Tasks Celery síncronas e propagam exceções para o teste.
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
+
+# ---------------------------------------------------------------------------
+# Banco de testes
+# ---------------------------------------------------------------------------
+# Override total do DATABASES — SQLite em memória, rápido e sem dependência
+# externa. CI roda com isso; dev local também (basta exportar
+# DJANGO_SETTINGS_MODULE=config.settings.test). Testes de integração com
+# Oracle ficam em apps específicos com ``@pytest.mark.oracle`` (futuro).
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",
+    }
+}

@@ -44,7 +44,7 @@
 ### Helpers e segurança
 - [x] **S1-13** Helper de criptografia AES-256 para CPF · **BACK** · 3h
 - [x] **S1-14** Helper de hash determinístico HMAC-SHA256 com pepper · **BACK** · 2h
-- [ ] **S1-15** Testes unitários dos helpers de cripto · **BACK+QA** · 3h
+- [x] **S1-15** Testes unitários dos helpers de cripto · **BACK+QA** · 3h
 - [ ] **S1-16** Seeders com dados realistas de clínica oftalmológica · **DB** · 4h
   - 5 médicos com diferentes subespecialidades
   - 50 pacientes
@@ -52,7 +52,7 @@
   - 20 FAQs com embeddings
 
 ### Frontend base
-- [ ] **S1-17** Configuração de Tailwind via `django-tailwind` · **FRONT** · 3h
+- [x] **S1-17** Configuração de Tailwind via `django-tailwind` · **FRONT** · 3h
 - [ ] **S1-18** Identidade visual: paleta, tipografia, design tokens · **DESIGN** · 6h
 - [ ] **S1-19** Logo placeholder do ClinicOS (versão definitiva no MVP2) · **DESIGN** · 2h
 - [ ] **S1-20** Wireframes de baixa fidelidade de todas as telas no Figma · **DESIGN** · 10h
@@ -63,9 +63,9 @@
 - [ ] **S1-23** Criar issues no GitHub para todas as tarefas das sprints 1-6 · **DEV LEAD** · 3h
 
 ### CI/CD básico
-- [ ] **S1-24** GitHub Actions: lint (ruff), formatador (black), pytest · **DEVOPS** · 4h
+- [x] **S1-24** GitHub Actions: lint (ruff), formatador (black), pytest · **DEVOPS** · 4h
 - [x] **S1-25** Pre-commit hooks instalados · **DEVOPS** · 1h
-- [ ] **S1-26** Badge de CI no README · **DEVOPS** · 0.5h
+- [x] **S1-26** Badge de CI no README · **DEVOPS** · 0.5h
 
 ---
 

@@ -83,6 +83,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Frontend / tema (django-tailwind — S1-17)
+    "tailwind",
+    "apps.theme",
     # Apps de domínio do ClinicOS
     "apps.core",
     "apps.agenda",
@@ -91,6 +94,18 @@ INSTALLED_APPS = [
     "apps.crm",
     "apps.site_publico",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Tailwind (django-tailwind — S1-17)
+# ---------------------------------------------------------------------------
+# ``TAILWIND_APP_NAME`` aponta para o app que hospeda ``static_src/`` (com
+# package.json, tailwind.config.js etc.). ``INTERNAL_IPS`` é necessário para
+# que o browser-reload do ``django-tailwind[reload]`` funcione no dev.
+# ``NPM_BIN_PATH`` indica onde está o binário do npm no container.
+TAILWIND_APP_NAME = "apps.theme"
+INTERNAL_IPS = ["127.0.0.1"]
+NPM_BIN_PATH = "npm"
 
 
 # ---------------------------------------------------------------------------

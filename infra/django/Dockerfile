@@ -8,8 +8,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Pacotes de sistema mínimos:
 #  - build-essential/libpq-dev: caso alguma wheel precise compilar
-#  - curl/ca-certificates: healthchecks e downloads pontuais
+#  - curl/ca-certificates/gnupg: healthchecks, downloads e repo do NodeSource
 #  - tini: PID 1 sane para o runserver/celery
+#  - nodejs (20 LTS, via NodeSource): exigência do django-tailwind, que dispara
+#    `npm install` ao rodar `python manage.py tailwind install` (S1-17).
 # Sem Oracle Instant Client: o driver `oracledb` roda em thin mode
 # (ADR-0001) e dispensa libs nativas.
 RUN apt-get update \
@@ -17,7 +19,10 @@ RUN apt-get update \
         build-essential \
         curl \
         ca-certificates \
+        gnupg \
         tini \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Usuário não-root

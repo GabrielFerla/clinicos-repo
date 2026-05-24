@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+ * Componentes utilitários do ClinicOS.
+ *
+ * Tudo declarado dentro de `@layer components` para que o Tailwind possa
+ * sobrescrever via utilidades (`class="btn-primary px-6"` funciona).
+ * ------------------------------------------------------------------------- */
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-colors;
+  }
+
+  .btn-primary {
+    @apply btn bg-blue-600 text-white hover:bg-blue-700;
+  }
+}
