@@ -14,12 +14,12 @@
 ## Tarefas
 
 ### Repositório e infraestrutura local
-- [ ] **S1-1** Repositório `clinicos` no GitHub com estrutura gitflow e templates de PR · **DEVOPS** · 2h
-- [ ] **S1-2** Docker Compose: Django + Oracle 23ai + Redis + Mailhog (dev) · **DEVOPS** · 4h
+- [x] **S1-1** Repositório `clinicos` no GitHub com estrutura gitflow e templates de PR · **DEVOPS** · 2h
+- [x] **S1-2** Docker Compose: Django + Oracle 23ai + Redis + Mailhog (dev) · **DEVOPS** · 4h
 - [ ] **S1-3** Script `make setup` que faz tudo em 1 comando para novos devs · **DEVOPS** · 2h
 
 ### Estrutura do projeto Django
-- [ ] **S1-4** Criar projeto Django com layout `apps/` + `config/` · **BACK** · 2h
+- [x] **S1-4** Criar projeto Django com layout `apps/` + `config/` · **BACK** · 2h
 - [ ] **S1-5** Criar apps: `core`, `agenda`, `prontuario`, `chatbot`, `crm`, `site_publico` · **BACK** · 1h
 - [ ] **S1-6** Settings divididos: `base.py`, `dev.py`, `prod.py`, `test.py` · **BACK** · 2h
 - [ ] **S1-7** Configurar variáveis de ambiente via `django-environ` · **BACK** · 1h
