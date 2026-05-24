@@ -1,0 +1,19 @@
+{% comment %}
+  Layout base do ClinicOS — componente reutilizável.
+
+  Estende `base.html` (do app theme) e expõe blocos para que as views/templates
+  específicos preencham apenas o conteúdo principal. Use assim:
+
+      {% extends "components/_layout.html" %}
+      {% block content %}<h1 class="text-2xl">Olá</h1>{% endblock %}
+
+  As variantes (sidebar, header etc.) devem ser criadas como outros componentes
+  ao longo das próximas sprints — este aqui é o esqueleto mínimo.
+{% endcomment %}
+{% extends "base.html" %}
+
+{% block content %}
+  <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    {% block main %}{% endblock %}
+  </main>
+{% endblock %}
