@@ -1,0 +1,10 @@
+# Dependências base do ClinicOS (runtime).
+# Pacotes consenso para Sprint 1; novas dependências de domínio
+# (chatbot, embeddings, etc.) entram em sprints posteriores.
+
+Django>=5.1,<5.2
+django-environ>=0.11,<1.0
+oracledb>=2.4
+redis>=5.0
+celery>=5.4,<6.0
+gunicorn>=22.0

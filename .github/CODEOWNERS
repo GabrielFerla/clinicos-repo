@@ -1,0 +1,9 @@
+# CODEOWNERS — ClinicOS
+#
+# Cada PR exige revisão dos owners listados. Sintaxe oficial:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+#
+# Projeto solo no momento: GabrielFerla é owner de tudo (placeholder).
+# Conforme o time crescer, particionar por diretório (`/apps/agenda/ @fulano @sicrano`).
+
+* @GabrielFerla
