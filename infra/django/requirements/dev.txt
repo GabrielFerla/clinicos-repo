@@ -1,0 +1,11 @@
+-r base.txt
+
+# Toolchain de desenvolvimento. Versões enxutas; ajuste em S1-24/S1-25
+# quando o CI estiver montado.
+pytest>=8.0
+pytest-django>=4.8
+pytest-cov>=5.0
+ruff>=0.6
+black>=24.0
+ipython>=8.0
+django-debug-toolbar>=4.4

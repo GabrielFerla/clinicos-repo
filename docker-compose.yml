@@ -1,24 +1,31 @@
 services:
   oracle:
-    image: container-registry.oracle.com/database/free:latest
+    image: gvenzl/oracle-free:23-slim
     container_name: clinicos-oracle
     ports:
       - "1521:1521"
     environment:
-      ORACLE_PWD: oracle
+      ORACLE_PASSWORD: oracle
+      APP_USER: clinicos
+      APP_USER_PASSWORD: oracle
     volumes:
       - oracle-data:/opt/oracle/oradata
+      - ./infra/oracle-init:/container-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "sqlplus", "-L", "system/oracle@//localhost:1521/FREEPDB1", "AS", "SYSDBA"]
+      test: ["CMD", "healthcheck.sh"]
       interval: 30s
       timeout: 10s
-      retries: 10
+      retries: 20
+      start_period: 60s
 
   redis:
     image: redis:7-alpine
     container_name: clinicos-redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
 
   mailhog:
     image: mailhog/mailhog
@@ -27,5 +34,62 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  django:
+    build:
+      context: .
+      dockerfile: infra/django/Dockerfile
+    container_name: clinicos-django
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      oracle:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mailhog:
+        condition: service_started
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      EMAIL_HOST: mailhog
+      EMAIL_PORT: "1025"
+      EMAIL_USE_TLS: "False"
+      DJANGO_DEBUG: "True"
+      DJANGO_SECRET_KEY: dev-insecure-change-me
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: infra/django/Dockerfile
+    container_name: clinicos-celery-worker
+    command: celery -A config worker -l info
+    volumes:
+      - ./:/app
+    depends_on:
+      django:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      EMAIL_HOST: mailhog
+      EMAIL_PORT: "1025"
+      EMAIL_USE_TLS: "False"
+      DJANGO_DEBUG: "True"
+      DJANGO_SECRET_KEY: dev-insecure-change-me
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+
 volumes:
   oracle-data:
+  redis-data:
