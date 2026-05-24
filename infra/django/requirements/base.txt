@@ -8,3 +8,4 @@ oracledb>=2.4
 redis>=5.0
 celery>=5.4,<6.0
 gunicorn>=22.0
+cryptography>=42.0
