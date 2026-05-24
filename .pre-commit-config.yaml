@@ -1,0 +1,75 @@
+# Pre-commit hooks do ClinicOS
+#
+# Instalar:    pip install pre-commit && pre-commit install
+# Rodar tudo:  pre-commit run --all-files
+# Atualizar:   pre-commit autoupdate
+#
+# Documentação: docs/PRE_COMMIT.md
+#
+# As versões abaixo refletem releases estáveis disponíveis em maio/2026.
+# Use `pre-commit autoupdate` periodicamente para acompanhar novas releases.
+
+default_language_version:
+  python: python3.12
+
+default_stages: [pre-commit]
+
+fail_fast: false
+
+repos:
+  # ----------------------------------------------------------------------
+  # Ruff — lint + formatter (rápido, substitui isort/flake8/pyupgrade)
+  # As configs (line-length, select, ignore, per-file-ignores) vêm de
+  # pyproject.toml.
+  # ----------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        name: ruff (lint --fix)
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+      # ruff-format coexiste com black por enquanto: ruff valida import order,
+      # black formata. Quando decidirmos migrar 100% para ruff-format, basta
+      # remover o hook do black abaixo (e o `black --check` do Makefile).
+      - id: ruff-format
+        name: ruff-format (check apenas; black formata)
+        args: [--check]
+        types_or: [python, pyi]
+
+  # ----------------------------------------------------------------------
+  # Black — formatter canônico do projeto (config em pyproject.toml)
+  # ----------------------------------------------------------------------
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 24.10.0
+    hooks:
+      - id: black
+        name: black
+        language_version: python3.12
+        types: [python]
+
+  # ----------------------------------------------------------------------
+  # Hooks genéricos do pre-commit-hooks — higiene de arquivos
+  # ----------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: trim trailing whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+        name: ensure newline at EOF
+      - id: check-yaml
+        name: check YAML syntax
+      - id: check-json
+        name: check JSON syntax
+      - id: check-added-large-files
+        name: bloqueia arquivos grandes (>500KB)
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+        name: bloqueia marcadores de merge conflict
+      - id: mixed-line-ending
+        name: normaliza line endings para LF
+        args: [--fix=lf]
+      - id: detect-private-key
+        name: detecta chaves privadas (LGPD/secrets)
