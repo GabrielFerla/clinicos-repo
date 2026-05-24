@@ -7,26 +7,32 @@ Em vez disso, cada ambiente (``dev``, ``prod``, ``test``) faz::
 
 e sobrescreve apenas o necessário.
 
-Variáveis de ambiente lidas aqui (vide ``docker-compose.yml``):
+Variáveis de ambiente lidas aqui (vide ``docker-compose.yml`` e ``.env.example``):
 
 - ``DJANGO_SECRET_KEY`` (obrigatória — falha rápido se faltar)
+- ``DJANGO_DEBUG`` (bool, default ``False``)
 - ``DJANGO_ALLOWED_HOSTS`` (CSV; default vazio)
-- ``DATABASE_URL`` (preferida) **ou** ``DB_HOST``/``DB_PORT``/``DB_NAME``/
-  ``DB_USER``/``DB_PASSWORD`` (fallback)
+- ``DATABASE_URL`` (formato ``oracle://user:password@host:port/?service_name=PDB``)
 - ``REDIS_URL`` (cache)
 - ``CELERY_BROKER_URL``
-- ``EMAIL_HOST`` / ``EMAIL_PORT`` / ``EMAIL_USE_TLS``
+- ``CELERY_RESULT_BACKEND`` (default = ``CELERY_BROKER_URL``)
+- ``EMAIL_URL`` (preferida) **ou** ``EMAIL_HOST`` / ``EMAIL_PORT`` /
+  ``EMAIL_USE_TLS`` / ``EMAIL_HOST_USER`` / ``EMAIL_HOST_PASSWORD``
+- ``DEFAULT_FROM_EMAIL``
+- ``CPF_ENCRYPTION_KEY`` (placeholder; usado em S1-13)
+- ``CPF_HASH_PEPPER`` (placeholder; usado em S1-14)
 
-S1-7 substituirá ``os.environ`` por ``django-environ`` mantendo as mesmas
-chaves. Aqui usamos ``os.environ`` direto para destravar a S1-6 sem criar
-dependência cruzada.
+A leitura é feita via :mod:`environ` (``django-environ``), que cuida do parsing
+de URLs (DATABASE_URL, REDIS_URL, EMAIL_URL) e do cast de tipos (bool/list/int).
+Se houver um arquivo ``.env`` na raiz do repo, ele é carregado automaticamente
+para facilitar execução fora do Docker (ver ``.env.example``).
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+
+import environ
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -35,21 +41,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 # ---------------------------------------------------------------------------
+# django-environ
+# ---------------------------------------------------------------------------
+# ``env`` é o único ponto de leitura de variáveis de ambiente neste arquivo.
+# Cast/default já ficam declarados na chamada — nunca usar ``os.environ`` direto
+# aqui pra evitar duas fontes de verdade.
+env = environ.Env(
+    DJANGO_DEBUG=(bool, False),
+    DJANGO_ALLOWED_HOSTS=(list, []),
+)
+
+# Carrega ``.env`` se existir (uso típico: dev local rodando ``manage.py`` fora
+# do container). Dentro do Docker as variáveis chegam pelo ``environment:`` do
+# compose e este ``read_env`` simplesmente não encontra arquivo — no-op seguro.
+environ.Env.read_env(BASE_DIR / ".env")
+
+
+# ---------------------------------------------------------------------------
 # Segurança
 # ---------------------------------------------------------------------------
-# Sem default: se a env var faltar, o Django falha imediatamente — é o que
-# queremos em qualquer ambiente real. Para rodar localmente, o
-# ``docker-compose.yml`` injeta ``DJANGO_SECRET_KEY=dev-insecure-change-me``.
-SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
+# Sem default: se a env var faltar, o ``django-environ`` levanta
+# ``ImproperlyConfigured`` imediatamente — é o que queremos em qualquer ambiente
+# real. Para rodar localmente, o ``docker-compose.yml`` injeta
+# ``DJANGO_SECRET_KEY=dev-insecure-change-me``.
+SECRET_KEY = env("DJANGO_SECRET_KEY")
 
-DEBUG = False
+DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
-_allowed_hosts_raw = os.environ.get("DJANGO_ALLOWED_HOSTS", "")
-ALLOWED_HOSTS: list[str] = (
-    [h.strip() for h in _allowed_hosts_raw.split(",") if h.strip()]
-    if _allowed_hosts_raw
-    else []
-)
+ALLOWED_HOSTS: list[str] = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 
 
 # ---------------------------------------------------------------------------
@@ -118,78 +137,34 @@ TEMPLATES = [
 # ---------------------------------------------------------------------------
 # Banco de dados (Oracle 23ai)
 # ---------------------------------------------------------------------------
-# Aceita duas formas:
-#
-# 1. ``DATABASE_URL`` no formato ``oracle://user:password@host:port/?service_name=PDB``
-#    (preferida; é o que o docker-compose injeta).
-# 2. Variáveis individuais ``DB_HOST``, ``DB_PORT``, ``DB_NAME``, ``DB_USER``,
-#    ``DB_PASSWORD`` (fallback útil para ambientes onde a URL é montada por
-#    outra ferramenta).
-#
-# Se nada estiver definido, cai num default explícito apontando para o serviço
-# ``oracle`` do compose. Isso evita explosão silenciosa em manage.py check, mas
-# *qualquer* operação real vai bater no Oracle.
-def _build_database_config() -> dict[str, dict[str, object]]:
-    """Monta o ``DATABASES`` lendo env vars (URL preferida, vars individuais como fallback)."""
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        parsed = urlparse(database_url)
-        query = parse_qs(parsed.query)
-        service_name = query.get("service_name", ["FREEPDB1"])[0]
-        host = parsed.hostname or "oracle"
-        port = parsed.port or 1521
-        # ``parsed.path`` pode estar vazio quando usamos ?service_name=...; nesse
-        # caso o NAME do Django deve ser "host:port/service_name" (formato do
-        # driver oracledb thin).
-        name = f"{host}:{port}/{service_name}"
-        return {
-            "default": {
-                "ENGINE": "django.db.backends.oracle",
-                "NAME": name,
-                "USER": parsed.username or "clinicos",
-                "PASSWORD": parsed.password or "",
-                "HOST": "",  # já embutido em NAME
-                "PORT": "",
-            }
-        }
-
-    # Fallback: variáveis individuais.
-    db_host = os.environ.get("DB_HOST", "oracle")
-    db_port = os.environ.get("DB_PORT", "1521")
-    db_name = os.environ.get("DB_NAME", "FREEPDB1")
-    return {
-        "default": {
-            "ENGINE": "django.db.backends.oracle",
-            "NAME": f"{db_host}:{db_port}/{db_name}",
-            "USER": os.environ.get("DB_USER", "clinicos"),
-            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
-            "HOST": "",
-            "PORT": "",
-        }
-    }
-
-
-DATABASES = _build_database_config()
+# ``env.db_url`` faz o parsing de ``DATABASE_URL`` no formato
+# ``oracle://user:password@host:port/?service_name=PDB`` e devolve o dict no
+# formato esperado pelo Django. O default aponta para o serviço ``oracle`` do
+# compose, evitando explosão silenciosa em ``manage.py check`` — qualquer
+# operação real ainda precisa do Oracle no ar.
+DATABASES = {
+    "default": env.db_url(
+        "DATABASE_URL",
+        default="oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1",
+    ),
+}
 
 
 # ---------------------------------------------------------------------------
 # Cache (Redis)
 # ---------------------------------------------------------------------------
-REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
-
+# ``env.cache_url`` traduz ``redis://host:port/db`` no dict ``CACHES``
+# esperado pelo Django (BACKEND + LOCATION).
 CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-    }
+    "default": env.cache_url("REDIS_URL", default="redis://redis:6379/0"),
 }
 
 
 # ---------------------------------------------------------------------------
 # Celery
 # ---------------------------------------------------------------------------
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/1")
-CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://redis:6379/1")
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
 CELERY_TIMEZONE = "America/Sao_Paulo"
 CELERY_TASK_TRACK_STARTED = True
 
@@ -197,12 +172,25 @@ CELERY_TASK_TRACK_STARTED = True
 # ---------------------------------------------------------------------------
 # Email
 # ---------------------------------------------------------------------------
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "mailhog")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "1025"))
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "False").lower() in ("true", "1", "yes")
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@clinicos.local")
+# Duas formas de configurar email:
+#
+# 1. ``EMAIL_URL`` — formato ``smtp://user:password@host:port`` (preferida em
+#    prod / staging, onde a config muda por ambiente). django-environ
+#    converte para EMAIL_HOST / EMAIL_PORT / EMAIL_HOST_USER /
+#    EMAIL_HOST_PASSWORD / EMAIL_USE_TLS automaticamente.
+# 2. Variáveis individuais ``EMAIL_HOST``/``EMAIL_PORT``/``EMAIL_USE_TLS``/
+#    ``EMAIL_HOST_USER``/``EMAIL_HOST_PASSWORD`` — é o que o ``docker-compose``
+#    injeta hoje (Mailhog).
+if env("EMAIL_URL", default=""):
+    vars().update(env.email_url("EMAIL_URL"))
+else:
+    EMAIL_HOST = env("EMAIL_HOST", default="mailhog")
+    EMAIL_PORT = env.int("EMAIL_PORT", default=1025)
+    EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+    EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+    EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@clinicos.local")
 
 
 # ---------------------------------------------------------------------------
@@ -247,3 +235,20 @@ MEDIA_ROOT = BASE_DIR / "media"
 # Defaults Django
 # ---------------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# ---------------------------------------------------------------------------
+# Cripto LGPD (placeholders — preenchidos em S1-13/S1-14)
+# ---------------------------------------------------------------------------
+# Chave AES-256 (urlsafe base64, 32 bytes) usada para criptografar CPF em
+# repouso. S1-13 implementa o helper de criptografia. Gere com::
+#
+#     python -c "import secrets; print(secrets.token_urlsafe(32))"
+#
+# Em prod, injetar via secret manager. Em dev, definir no ``.env``.
+CPF_ENCRYPTION_KEY = env("CPF_ENCRYPTION_KEY", default=None)
+
+# Pepper para hash determinístico HMAC-SHA256 do CPF (busca por igualdade
+# sem expor o valor em claro). S1-14 implementa o helper. Mesma origem que
+# ``CPF_ENCRYPTION_KEY``: secret manager em prod, ``.env`` em dev.
+CPF_HASH_PEPPER = env("CPF_HASH_PEPPER", default=None)
