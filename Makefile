@@ -1,5 +1,6 @@
-.PHONY: up down logs app worker test lint fmt hooks-install
+.PHONY: setup up down logs app worker test lint fmt hooks-install
 
+setup:          ; bash infra/scripts/setup.sh
 up:             ; docker compose up -d
 down:           ; docker compose down
 logs:           ; docker compose logs -f

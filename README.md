@@ -58,6 +58,16 @@ clinicos/
 
 ---
 
+## Setup local em 1 comando
+
+```bash
+make setup
+```
+
+Sobe Oracle 23ai + Redis + Mailhog + Django, aplica migrations e cria superuser `admin/admin`. Pré-requisitos: Docker + Docker Compose v2 (não precisa de Python no host). Detalhes, tempo estimado e troubleshooting em [`docs/SETUP.md`](docs/SETUP.md).
+
+---
+
 ## Onde começar
 
 **Se você está chegando agora ao projeto:**
