@@ -1,5 +1,7 @@
 # ClinicOS
 
+[![CI](https://github.com/GabrielFerla/clinicos-repo/actions/workflows/ci.yml/badge.svg)](https://github.com/GabrielFerla/clinicos-repo/actions/workflows/ci.yml)
+
 > Sistema de gestão para clínicas médicas privadas brasileiras, com foco no fluxo central de valor: paciente conversa com chatbot no site, agenda consulta e o médico recebe o atendimento já organizado em seu painel interno.
 
 **Cliente piloto MVP1:** clínica de oftalmologia.

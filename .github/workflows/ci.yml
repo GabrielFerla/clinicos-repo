@@ -1,0 +1,137 @@
+# GitHub Actions — ClinicOS CI [S1-24]
+#
+# Pipeline rápido (sem Docker, sem Oracle) que valida cada push/PR em main:
+#
+#   1. lint            — ruff check + black --check
+#   2. test            — pytest com SQLite em memória (override em settings.test)
+#   3. security-check  — bandit (LGPD/PII); ainda em modo informativo (não falha o CI)
+#
+# Decisões:
+#   - Sem service container do Oracle 23ai (imagem muito grande, healthcheck lento e
+#     instável no Actions). Testes que exigirem features específicas do Oracle
+#     (PL/SQL, HNSW, etc.) ficarão em apps marcados com @pytest.mark.oracle e
+#     rodam apenas em ambiente local/staging. CI cobre lógica de domínio com SQLite.
+#   - Python 3.12 (mesma versão do pre-commit e do pyproject).
+#   - Cache do pip via `setup-python` para acelerar (~30s vs ~2min sem cache).
+#
+# Manutenção:
+#   - Para bumpar versões de actions, abrir PR mexendo apenas neste arquivo.
+#   - Quando bandit estabilizar (sem falsos positivos), remover o `|| true` do step.
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+# Cancela runs antigos do mesmo branch/PR — economiza minutos do Actions.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # lint — ruff + black --check
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint (ruff + black)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: infra/django/requirements/dev.txt
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r infra/django/requirements/dev.txt
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: Black (formatting check)
+        run: black --check .
+
+  # ---------------------------------------------------------------------------
+  # test — pytest com SQLite em memória
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests (pytest + coverage)
+    runs-on: ubuntu-latest
+    env:
+      # Settings forçam SQLite (ver config/settings/test.py).
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      DJANGO_SECRET_KEY: ci-secret-not-for-production
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DATABASE_URL: "sqlite:///:memory:"
+      REDIS_URL: "redis://localhost:6379/0"
+      CELERY_BROKER_URL: "redis://localhost:6379/1"
+      EMAIL_HOST: "localhost"
+      EMAIL_PORT: "1025"
+      # Chaves fake de tamanho suficiente para o helper de cripto (S1-13/S1-14).
+      CPF_ENCRYPTION_KEY: "ci-fake-key-32-bytes-padded-to-be-long-enough!"
+      CPF_HASH_PEPPER: "ci-fake-pepper-at-least-16-bytes-long"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: infra/django/requirements/dev.txt
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r infra/django/requirements/dev.txt
+
+      - name: Run pytest with coverage
+        run: pytest -q --tb=short --cov=apps --cov-report=term --cov-report=xml
+
+      - name: Upload coverage report (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # security-check — bandit (modo informativo)
+  # ---------------------------------------------------------------------------
+  # Roda em paralelo aos demais; falhas não derrubam o CI (ainda). Quando os
+  # apps amadurecerem e o nível de falso positivo for baixo, remover o
+  # `|| true` para tornar o gate efetivo.
+  security-check:
+    name: Security (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit
+
+      - name: Bandit scan (informativo)
+        run: bandit -r apps/ -ll || true
