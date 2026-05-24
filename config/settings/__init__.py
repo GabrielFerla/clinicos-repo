@@ -1,10 +1,13 @@
 """Pacote de settings do ClinicOS.
 
-Atualmente carrega o placeholder mínimo (`_placeholder.py`) apenas para permitir
-que `python manage.py check` rode antes da divisão final de settings.
+A partir da S1-6 este pacote NÃO importa nenhum módulo automaticamente. O
+ambiente é escolhido via variável `DJANGO_SETTINGS_MODULE`:
 
-S1-6 substituirá este import por `base/dev/prod/test` propriamente divididos e
-selecionados via `DJANGO_SETTINGS_MODULE` (ex.: `config.settings.dev`).
+- `config.settings.dev`  → desenvolvimento local (default em ``manage.py``)
+- `config.settings.test` → execução de testes (``pytest``/``make test``)
+- `config.settings.prod` → produção
+- `config.settings.base` → não usar diretamente; é apenas a base herdada
+
+A configuração compartilhada vive em ``base.py``. Cada ambiente faz
+``from .base import *`` e sobrescreve apenas o necessário.
 """
-
-from ._placeholder import *  # noqa: F401,F403

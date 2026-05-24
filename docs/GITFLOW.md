@@ -95,6 +95,7 @@ Quando `main` corresponder a um ambiente de produção real:
 
 - `CONTRIBUTING.md` — padrões de commit, code style, PR, testes, ADRs.
 - `CLAUDE.md` — modelo orquestrador + subagente para sessões Claude Code.
+- `docs/PRE_COMMIT.md` — instalação e uso dos pre-commit hooks (ruff, black, higiene).
 - `.github/pull_request_template.md` — template canônico de PR.
 - `.github/ISSUE_TEMPLATE/` — templates de issue (bug, feature, sprint task).
 - `.github/CODEOWNERS` — donos de revisão.
