@@ -16,13 +16,13 @@
 ### Repositório e infraestrutura local
 - [x] **S1-1** Repositório `clinicos` no GitHub com estrutura gitflow e templates de PR · **DEVOPS** · 2h
 - [x] **S1-2** Docker Compose: Django + Oracle 23ai + Redis + Mailhog (dev) · **DEVOPS** · 4h
-- [ ] **S1-3** Script `make setup` que faz tudo em 1 comando para novos devs · **DEVOPS** · 2h
+- [x] **S1-3** Script `make setup` que faz tudo em 1 comando para novos devs · **DEVOPS** · 2h
 
 ### Estrutura do projeto Django
 - [x] **S1-4** Criar projeto Django com layout `apps/` + `config/` · **BACK** · 2h
 - [x] **S1-5** Criar apps: `core`, `agenda`, `prontuario`, `chatbot`, `crm`, `site_publico` · **BACK** · 1h
 - [x] **S1-6** Settings divididos: `base.py`, `dev.py`, `prod.py`, `test.py` · **BACK** · 2h
-- [ ] **S1-7** Configurar variáveis de ambiente via `django-environ` · **BACK** · 1h
+- [x] **S1-7** Configurar variáveis de ambiente via `django-environ` · **BACK** · 1h
 
 ### Modelagem completa
 - [ ] **S1-8** Modelagem das entidades em Django models · **BACK+DB** · 8h
@@ -42,8 +42,8 @@
 - [ ] **S1-12** Criação do índice HNSW em `FAQ_VECTOR.EMBEDDING` · **DB** · 1h
 
 ### Helpers e segurança
-- [ ] **S1-13** Helper de criptografia AES-256 para CPF · **BACK** · 3h
-- [ ] **S1-14** Helper de hash determinístico HMAC-SHA256 com pepper · **BACK** · 2h
+- [x] **S1-13** Helper de criptografia AES-256 para CPF · **BACK** · 3h
+- [x] **S1-14** Helper de hash determinístico HMAC-SHA256 com pepper · **BACK** · 2h
 - [ ] **S1-15** Testes unitários dos helpers de cripto · **BACK+QA** · 3h
 - [ ] **S1-16** Seeders com dados realistas de clínica oftalmológica · **DB** · 4h
   - 5 médicos com diferentes subespecialidades
