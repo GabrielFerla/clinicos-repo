@@ -1,0 +1,75 @@
+[project]
+name = "clinicos"
+version = "0.1.0"
+description = "ClinicOS — sistema de gestão para clínicas oftalmológicas (MVP1)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [
+    { name = "Grupo MedReview" },
+]
+dependencies = [
+    "django>=5.1,<6.0",
+    "oracledb>=2.5",
+    "django-environ>=0.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.10",
+    "ruff>=0.7",
+    "pytest>=8.3",
+    "pytest-django>=4.9",
+    "pytest-cov>=5.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["apps*", "config*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | migrations
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "S",   # flake8-bandit
+    "DJ",  # flake8-django
+]
+ignore = [
+    "S101",  # uso de assert é ok em testes
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106"]
+"**/migrations/**" = ["E501"]
+"config/settings/_placeholder.py" = ["S105"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = "-ra --strict-markers"
