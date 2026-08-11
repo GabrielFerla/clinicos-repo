@@ -267,3 +267,48 @@ CPF_ENCRYPTION_KEY = env("CPF_ENCRYPTION_KEY", default=None)
 # sem expor o valor em claro). S1-14 implementa o helper. Mesma origem que
 # ``CPF_ENCRYPTION_KEY``: secret manager em prod, ``.env`` em dev.
 CPF_HASH_PEPPER = env("CPF_HASH_PEPPER", default=None)
+
+
+# ---------------------------------------------------------------------------
+# Chatbot — LLM e embeddings (Sprint 5)
+# ---------------------------------------------------------------------------
+# No MVP1 o LLM roda **local, via Ollama**, pelo endpoint compatível com a API
+# da OpenAI. O compromisso do projeto com a Anthropic (README, ADR-0002) segue
+# de pé — ver ``docs/CHAT_MVP.md``. O código fala com uma interface
+# (``apps.chatbot.services.llm.base.LLMClient``), então trocar o provedor é
+# mudar ``LLM_PROVIDER``, não reescrever o ``ChatService``.
+
+LLM_PROVIDER = env("LLM_PROVIDER", default="ollama")
+LLM_BASE_URL = env("LLM_BASE_URL", default="http://host.docker.internal:11434/v1")
+# O cliente OpenAI recusa api_key vazia; o Ollama ignora o valor.
+LLM_API_KEY = env("LLM_API_KEY", default="ollama")
+
+# IMPORTANTE: use um modelo **sem "thinking"**. Modelos da família qwen3
+# raciocinam antes de responder e não há como desligar isso pela API (medido:
+# `think:false`, `enable_thinking` e `/no_think` são todos ignorados ou fazem
+# o raciocínio vazar como resposta). Na prática isso vira de 8 a 45 segundos
+# de tela em branco. Ver docs/CHAT_MVP.md §4.2.
+LLM_MODEL = env("LLM_MODEL", default="qwen2.5:3b")
+LLM_TEMPERATURE = env.float("LLM_TEMPERATURE", default=0.1)
+LLM_TIMEOUT_SEGUNDOS = env.int("LLM_TIMEOUT_SEGUNDOS", default=120)
+# Quantas rodadas de tool call são permitidas antes de forçar a resposta final.
+# Segura loop de modelo que fica repedindo a mesma ferramenta.
+LLM_MAX_TOOL_ITERACOES = env.int("LLM_MAX_TOOL_ITERACOES", default=2)
+
+# Embeddings também via Ollama — evita arrastar torch/sentence-transformers
+# (~2,3 GB) para dentro da imagem Django. `all-minilm` é a mesma família
+# escolhida no ADR-0004 e produz **384 dimensões**, então a coluna
+# FAQ_VECTOR.EMBEDDING não muda.
+EMBEDDING_PROVIDER = env("EMBEDDING_PROVIDER", default="ollama")
+EMBEDDING_BASE_URL = env("EMBEDDING_BASE_URL", default="http://host.docker.internal:11434")
+EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="all-minilm")
+# Precisa bater com a dimensão declarada na migration da coluna VECTOR.
+# Mudar aqui sem migrar + reindexar devolve resultado errado silenciosamente.
+EMBEDDING_DIM = env.int("EMBEDDING_DIM", default=384)
+
+# Teto de duração de um turno de chat (rede de segurança para não prender
+# worker indefinidamente) e de histórico reenviado ao modelo. O contexto real
+# do Ollama é 4096 tokens, bem abaixo do que o modelo anuncia — histórico
+# longo faz o system prompt (com os guardrails) ser descartado silenciosamente.
+CHAT_STREAM_MAX_SEGUNDOS = env.int("CHAT_STREAM_MAX_SEGUNDOS", default=120)
+CHAT_HISTORICO_MAX_TURNOS = env.int("CHAT_HISTORICO_MAX_TURNOS", default=6)

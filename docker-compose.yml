@@ -44,6 +44,15 @@ services:
       - ./:/app
     ports:
       - "8000:8000"
+    # O LLM e os embeddings rodam no Ollama do HOST, não num container.
+    # `host.docker.internal` é o caminho suportado no Docker Desktop/WSL2 —
+    # `network_mode: host` quebra o port forwarding para o browser (o "host"
+    # do container é a VM do Docker Desktop, não a distro WSL2).
+    #
+    # Pré-requisito no host: o Ollama precisa escutar em 0.0.0.0, não só em
+    # 127.0.0.1 (o default). Ver docs/SETUP.md, seção Ollama.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       oracle:
         condition: service_healthy
@@ -61,6 +70,10 @@ services:
       EMAIL_USE_TLS: "False"
       DJANGO_DEBUG: "True"
       DJANGO_SECRET_KEY: dev-insecure-change-me
+      LLM_BASE_URL: http://host.docker.internal:11434/v1
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
+      EMBEDDING_BASE_URL: http://host.docker.internal:11434
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-minilm}
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
 
@@ -72,6 +85,8 @@ services:
     command: celery -A config worker -l info
     volumes:
       - ./:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       django:
         condition: service_started

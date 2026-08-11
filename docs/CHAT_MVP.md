@@ -65,9 +65,18 @@ O `SYSTEM_PROMPT` do `checkpoint-4` (persona + "NUNCA invente horários"), as FA
 
 Cinco medições feitas neste host antes de planejar. Todas mudam alguma decisão.
 
-### 4.1 O Ollama não é alcançável pelo container — bloqueador duro
+### 4.1 Conectividade com o Ollama — resolvido com `extra_hosts` apenas
 
-`ss -ltnp` mostra `LISTEN 127.0.0.1:11434`. O container **não alcança**, e `extra_hosts` sozinho não resolve. Precisa de `OLLAMA_HOST=0.0.0.0` no serviço do host **e** `extra_hosts` no compose. Sem isso: `APIConnectionError` em tudo.
+`ss -ltnp` mostra `LISTEN 127.0.0.1:11434`, o que sugere que o container não alcançaria o Ollama. **Na prática, alcança.** Testado de dentro do container:
+
+```
+http://host.docker.internal:11434/api/tags -> 200
+host.docker.internal resolve para: 192.168.65.254
+```
+
+O Docker Desktop no WSL2 faz proxy de `host.docker.internal` até o `localhost` do host, então o bind em `127.0.0.1` não impede o acesso. Basta o `extra_hosts: ["host.docker.internal:host-gateway"]` no compose — **`OLLAMA_HOST=0.0.0.0` não é necessário** neste setup.
+
+Confirmado com inferência real a partir do container, não só com o `/api/tags`. Se um dia a stack sair do Docker Desktop (Docker Engine puro, CI, servidor Linux), aí sim o bind vira problema — e a correção é a variável no serviço do host.
 
 ### 4.2 O modelo instalado não serve
 
@@ -88,7 +97,18 @@ Fluxo completo medido (tool + resposta): **9,4s de tela em branco** no caso bom;
 
 **O bom:** tool use com o 4b é confiável — **6/6** nas queries reais, incluindo normalizar "oftalmologista" → `{"especialidade": "Oftalmologia"}` e inferir `periodo_preferido: "manha"`. E acertou não chamar tool nenhuma no "Bom dia!". **Tool use não é o risco; latência é.**
 
-**Ação:** usar variante sem thinking — `qwen3:4b-instruct-2507`, `qwen2.5:3b-instruct`, ou um Modelfile com `<think></think>` já preenchido. Validar pelo tempo até o primeiro `delta.content` **não-vazio** — não pelo primeiro byte, que mede raciocínio e engana.
+**Ação tomada: trocado para `qwen2.5:3b`** (1,9 GB), que não tem thinking e mantém o suporte a tools. Medido de dentro do container, com o modelo quente:
+
+| Métrica | qwen3:4b | **qwen2.5:3b** |
+|---|---:|---:|
+| TTFT (1º `delta.content`) | 10,9s | **0,19s** |
+| Campo `reasoning` no stream | 794 deltas | **ausente** |
+| Decisão de tool | 3,2s a 24,6s | **0,26s a 0,66s** |
+| Acerto na escolha de tool | 6/6 | **4/4** |
+
+Resultado: **57x mais rápido no TTFT**, e a escolha de tool continua correta — inclusive respeitando o `enum` do schema (`"oftalmologista"` → `Oftalmologia`) e acertando **não** chamar tool nenhuma no "Bom dia!".
+
+Ao trocar de modelo, validar sempre pelo tempo até o primeiro `delta.content` **não-vazio** — não pelo primeiro byte, que mede raciocínio e engana. E medir com o modelo **quente**: o primeiro request depois de subir o Ollama paga o carregamento na VRAM (47s observados para o chat, 17s para o embedding).
 
 ### 4.3 Existe GPU, e ela está quase cheia
 
@@ -230,7 +250,9 @@ Retornar **só `(id, distância)`** e hidratar com o ORM — evita ler `RESPOSTA
 
 O risco real com 4B não é inventar do zero — é **completar lacunas** ("e temos também às 14h") e **concordar com o usuário** ("então tem quinta às 15h, né?" → "Sim!").
 
-**Validador pós-geração:** extrair `HH:MM`, `DD/MM` e nomes após "Dr./Dra." do texto; se algum não estiver no retorno das tools, marcar `alucinacao_detectada` e trocar por fallback seguro. Como não dá para desfazer o que já foi streamado, **validar em buffer antes de emitir** — com essa latência o streaming não está salvando nada mesmo, e é mais honesto. A taxa de detecção é o número que vai para a banca.
+**Validador pós-geração:** extrair `HH:MM`, `DD/MM` e nomes após "Dr./Dra." do texto; se algum não estiver no retorno das tools, marcar `alucinacao_detectada` e trocar por fallback seguro. A taxa de detecção é o número que vai para a banca.
+
+Como não dá para desfazer o que já foi streamado, há duas saídas: **(a)** validar em buffer e só então emitir, ou **(b)** streamar e mandar um evento de retratação ao detectar. Comece por **(a)** — é mais simples e mais honesto. O custo é perder o efeito de digitação, mas com respostas curtas de FAQ e TTFT de 0,19s a diferença percebida é pequena; se incomodar, (b) fica como evolução.
 
 #### Cinco consertos sobre o código do spike
 
@@ -281,10 +303,10 @@ docker stop $(docker ps -q --filter name=medreview)
 ```
 
 ```bash
-ollama pull qwen3:4b-instruct-2507 && ollama pull all-minilm
+ollama pull qwen2.5:3b && ollama pull all-minilm
 ```
 
-Se a tag não existir no registry, usar `qwen2.5:3b-instruct`. **Não puxar o 8b** — não cabe nos 529 MiB de VRAM livres.
+**Não puxar o `qwen3:8b`** — não cabe nos 529 MiB de VRAM livres, e faria offload para CPU.
 
 ```bash
 bash infra/scripts/bootstrap.sh
@@ -308,11 +330,11 @@ docker compose exec django pytest -m oracle -q
 
 ---
 
-## 7. Três expectativas a corrigir
+## 7. Expectativas revisadas
 
-1. **`TTFT ≤ 2s` de [`METRICAS.md`](METRICAS.md) é inatingível** com LLM local, por uma ordem de grandeza (9,4s no caso bom). Redefinir a métrica por ambiente — *"≤ 15s com modelo local; ≤ 2s com provider gerenciado"* — e **registrar o número medido em vez de escondê-lo**. Para a banca, medir e explicar mostra mais rigor que uma meta furada.
-2. **Streaming entrega pouco aqui.** Com 8-45s de silêncio *antes* do primeiro token e ~1s de geração depois, o que dá UX é o `event: status` e os cards renderizados pelo servidor — não a "animação suave de aparição dos tokens" `[S5-4]`, que pode ser despriorizada.
-3. **"O spike validou tool use 3/3"** foi com o 8b. O teste com o 4b deu 6/6, então a conclusão se sustenta — mas os dois mediram coisas diferentes e **nenhum mediu o que quebra** (latência e thinking). Reaproveitar `03_tool_use_demo.py` como script de smoke, não como evidência.
+1. **`TTFT ≤ 2s` de [`METRICAS.md`](METRICAS.md) é atingível — a meta está de pé.** A primeira leitura deste documento concluiu o contrário, com base no `qwen3:4b` (9,4s no caso bom). Estava errada: o problema era **escolha de modelo**, não uma limitação de LLM local. Com `qwen2.5:3b` o TTFT medido é **0,19s**, com folga de uma ordem de grandeza. Fica a lição, que vale para a banca: a métrica não precisava ser afrouxada, precisava de um modelo adequado.
+2. **O cold start é o número honesto a reportar.** O primeiro request depois de subir o Ollama custa 47s (chat) e 17s (embedding) para carregar o modelo na VRAM. Não é latência de inferência e não deve entrar na média — mas é o que o avaliador vai sentir se abrir o chat com tudo frio. Mitigação: `OLLAMA_KEEP_ALIVE` e um request de aquecimento antes da demo.
+3. **"O spike validou tool use 3/3"** foi com o `qwen3:8b`. Os testes aqui deram 6/6 no `qwen3:4b` e 4/4 no `qwen2.5:3b`, então a conclusão se sustenta — mas os três mediram coisas diferentes e **o spike não mediu o que de fato quebra** (latência e thinking). Reaproveitar `03_tool_use_demo.py` como script de smoke, não como evidência.
 
 ---
 
