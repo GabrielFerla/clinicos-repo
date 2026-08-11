@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 # Teto de itens devolvidos ao modelo. Contexto é caro (4096 tokens no Ollama) e
 # lista longa aumenta a chance de o modelo transcrever errado na resposta.
 MAX_SLOTS = 5
-MAX_FAQS = 3
+MAX_FAQS = 2
 
 # Acima desta distância de cosseno, o resultado é ruído. Sem corte, a busca
 # vetorial sempre devolve "o menos distante", mesmo para pergunta fora de
 # assunto — e o modelo trata isso como resposta válida.
-DISTANCIA_MAXIMA_FAQ = 0.85
+DISTANCIA_MAXIMA_FAQ = 0.60
 
 PERIODOS = {
     "manha": (dt.time(0, 0), dt.time(12, 0)),
@@ -153,10 +153,18 @@ class BuscarFaqTool(BaseTool):
     """Busca semântica na FAQ da clínica, via Oracle AI Vector Search."""
 
     name = "buscar_faq"
+    # Esta é a ferramenta padrão, e a descrição diz isso de forma explícita.
+    # Num modelo pequeno é a `description` que faz o roteamento, não o system
+    # prompt: sem a instrução de fallback, perguntas legítimas de FAQ
+    # ("tem estacionamento?", "preciso tirar a lente antes?") não chamavam
+    # ferramenta nenhuma e o modelo respondia de memória — inventando, inclusive,
+    # que a clínica não tem estacionamento.
     description = (
-        "Consulta a base de perguntas frequentes da clínica. Use para dúvidas "
-        "sobre convênios, preços, formas de pagamento, endereço, estacionamento, "
-        "preparo para a consulta, exames e sintomas. NÃO use para horários."
+        "Consulta a base de informações da clínica. Use para QUALQUER pergunta "
+        "sobre a clínica que não seja disponibilidade de horário: convênios, "
+        "preços, pagamento, endereço, estacionamento, horário de funcionamento, "
+        "preparo para a consulta, lentes de contato, exames, sintomas e "
+        "políticas. Na dúvida sobre qual ferramenta usar, use esta."
     )
     input_schema: dict[str, Any] = {
         "type": "object",

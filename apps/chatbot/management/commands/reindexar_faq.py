@@ -29,6 +29,11 @@ from apps.chatbot.services.embeddings import get_embedding_provider
 TAMANHO_LOTE = 16
 
 
+def _texto_indexavel(faq: FaqVector) -> str:
+    """Texto que vai para o embedding: pergunta e resposta juntas."""
+    return f"{faq.pergunta}\n{faq.resposta}"
+
+
 class Command(BaseCommand):
     help = "Gera embeddings dos FAQs ativos e grava em FAQ_VECTOR.EMBEDDING."
 
@@ -62,10 +67,16 @@ class Command(BaseCommand):
 
         for inicio in range(0, len(pendentes), TAMANHO_LOTE):
             lote = pendentes[inicio : inicio + TAMANHO_LOTE]
-            # Só a PERGUNTA é vetorizada. A busca compara pergunta-do-usuário
-            # com pergunta-cadastrada; embedar a resposta junto dilui o sinal.
+            # Pergunta **e** resposta entram no vetor — o spike indexava só a
+            # pergunta, e isso custava relevância. Perguntas de FAQ são curtas e
+            # compartilham muita palavra funcional ("a clínica", "vocês"), então
+            # o embedding acabava dominado por elas: "A clínica atende
+            # convênio?" recuperava "Qual o horário de funcionamento da
+            # clínica?". A resposta traz o vocabulário que desambigua.
+            # Medido numa baseline de 7 paráfrases: só pergunta 6/7, com
+            # resposta 7/7.
             try:
-                vetores = provider.gerar([f.pergunta for f in lote])
+                vetores = provider.gerar([_texto_indexavel(f) for f in lote])
             except Exception as exc:  # noqa: BLE001
                 raise CommandError(f"Falha ao gerar embeddings: {exc}") from exc
 

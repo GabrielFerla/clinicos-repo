@@ -105,6 +105,7 @@ class FakeLLMClient:
         self,
         mensagens: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
     ) -> RespostaLLM:
         """Devolve a próxima resposta do roteiro e registra a chamada."""
         self.chamadas_conversar.append(self._registrar(mensagens, tools, streaming=False))

@@ -140,6 +140,7 @@ class LLMClient(Protocol):
         self,
         mensagens: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
     ) -> RespostaLLM:
         """Chamada não-streaming. Usada para decidir a chamada de ferramenta.
 

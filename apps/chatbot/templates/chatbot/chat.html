@@ -1,0 +1,153 @@
+{% extends "components/_layout.html" %}
+{% comment %}
+  Chat público da clínica — S5-1 a S5-3.
+
+  O streaming usa `EventSource` puro, sem a extensão SSE do htmx. Três razões:
+
+  1. Zero dependência de CDN. O README do spike registra que rede corporativa
+     bloqueia unpkg/jsdelivr, e um chat que não carrega na rede do cliente
+     piloto não serve.
+  2. O contrato de eventos aqui é tipado (`status`, `token`, `erro`, `close`) e
+     cada um faz coisa diferente com o DOM — trocar conteúdo, acrescentar,
+     encerrar. Expressar isso com `sse-swap` exigiria um alvo por evento.
+  3. Segurança: usando `textContent` o texto do modelo nunca é interpretado
+     como HTML. A extensão do htmx injeta como HTML, o que transforma prompt
+     injection em XSS. O servidor já escapa (ver `apps/chatbot/sse.py`); isto
+     é a segunda camada.
+
+  Isso não conflita com o ADR-0003: o que ele rejeita é SPA/Vue. E o ADR-0005
+  reserva explicitamente o chat como caso de UI custom.
+{% endcomment %}
+
+{% block title %}Fale com a clínica — ClinicOS{% endblock %}
+
+{% block main %}
+<section class="mx-auto flex h-[80vh] max-w-2xl flex-col">
+  <header class="mb-4">
+    <h1 class="text-2xl font-semibold text-gray-900">Fale com a clínica</h1>
+    <p class="text-sm text-gray-600">
+      Tire dúvidas sobre convênios, preços e preparo, ou consulte horários disponíveis.
+    </p>
+  </header>
+
+  <div id="conversa" class="flex-1 space-y-4 overflow-y-auto rounded-xl bg-gray-100 p-4">
+    <div class="flex justify-start">
+      <p class="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2 shadow-sm ring-1 ring-gray-200">
+        Olá! Sou o assistente virtual da clínica. Como posso ajudar?
+      </p>
+    </div>
+  </div>
+
+  <form id="formulario" class="mt-4 flex gap-2" autocomplete="off">
+    {% csrf_token %}
+    <input
+      id="pergunta"
+      name="pergunta"
+      type="text"
+      maxlength="500"
+      required
+      placeholder="Escreva sua pergunta…"
+      class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+    >
+    <button
+      id="enviar"
+      type="submit"
+      class="rounded-lg bg-sky-600 px-5 py-2 font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+    >Enviar</button>
+  </form>
+</section>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  "use strict";
+  const conversa = document.getElementById("conversa");
+  const formulario = document.getElementById("formulario");
+  const campo = document.getElementById("pergunta");
+  const botao = document.getElementById("enviar");
+  const csrf = formulario.querySelector("[name=csrfmiddlewaretoken]").value;
+
+  const rolar = () => { conversa.scrollTop = conversa.scrollHeight; };
+
+  const travar = (travado) => {
+    botao.disabled = travado;
+    campo.disabled = travado;
+    if (!travado) campo.focus();
+  };
+
+  formulario.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const pergunta = campo.value.trim();
+    if (!pergunta) return;
+
+    travar(true);
+    campo.value = "";
+
+    let bloco;
+    try {
+      const resposta = await fetch("{% url 'chatbot:mensagem' %}", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrf, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ pergunta }),
+      });
+      if (!resposta.ok) throw new Error("falha ao registrar a mensagem");
+      const molde = document.createElement("div");
+      molde.innerHTML = await resposta.text();
+      bloco = molde.firstElementChild;
+      conversa.appendChild(bloco);
+      rolar();
+    } catch {
+      travar(false);
+      return;
+    }
+
+    const status = bloco.querySelector("[data-status]");
+    const alvo = bloco.querySelector("[data-resposta]");
+    const aviso = bloco.querySelector("[data-erro]");
+
+    // A pergunta vai na query string do GET porque EventSource só faz GET. Ela
+    // já foi validada e truncada no POST; aqui serve para o turno ser
+    // reexecutável de forma idempotente (o servidor detecta turno já
+    // respondido e encerra sem chamar o modelo de novo).
+    const url = bloco.dataset.stream + "&q=" + encodeURIComponent(bloco.dataset.pergunta);
+    const fonte = new EventSource(url);
+
+    const encerrar = () => { fonte.close(); travar(false); };
+
+    fonte.addEventListener("status", (e) => {
+      // Payload vazio significa "apague o indicador".
+      if (e.data) { status.textContent = e.data; status.classList.remove("hidden"); }
+      else { status.classList.add("hidden"); }
+      rolar();
+    });
+
+    // textContent, nunca innerHTML: o texto vem de um LLM que recebeu entrada
+    // do usuário. O servidor já escapa; esta é a segunda camada.
+    fonte.addEventListener("token", (e) => { alvo.textContent += e.data; rolar(); });
+
+    fonte.addEventListener("erro", (e) => {
+      status.classList.add("hidden");
+      aviso.textContent = e.data;
+      aviso.classList.remove("hidden");
+      rolar();
+    });
+
+    fonte.addEventListener("close", () => { status.classList.add("hidden"); encerrar(); });
+
+    // Falha de rede. Sem fechar aqui, o EventSource reconecta a cada ~3s e
+    // reexecuta o turno, saturando o Ollama (que atende um pedido por vez).
+    fonte.onerror = () => {
+      if (!alvo.textContent) {
+        aviso.textContent = "Conexão interrompida. Tente enviar de novo.";
+        aviso.classList.remove("hidden");
+      }
+      status.classList.add("hidden");
+      encerrar();
+    };
+  });
+
+  campo.focus();
+})();
+</script>
+{% endblock %}

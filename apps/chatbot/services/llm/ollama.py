@@ -159,9 +159,16 @@ class OllamaLLMClient:
         self,
         mensagens: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
     ) -> RespostaLLM:
-        """Chamada não-streaming; devolve texto e/ou ``tool_calls``."""
-        bruta = self._criar(mensagens, tools, stream=False, tool_choice="auto")
+        """Chamada não-streaming; devolve texto e/ou ``tool_calls``.
+
+        ``tool_choice="required"`` obriga o modelo a escolher uma ferramenta.
+        Ver a justificativa em ``apps.chatbot.services.chat`` — em modelo
+        pequeno, ``auto`` deixa de chamar ferramenta de forma imprevisível e o
+        modelo responde de memória.
+        """
+        bruta = self._criar(mensagens, tools, stream=False, tool_choice=tool_choice)
 
         if not bruta.choices:
             logger.error("Ollama devolveu resposta sem choices (modelo=%s).", self.modelo)

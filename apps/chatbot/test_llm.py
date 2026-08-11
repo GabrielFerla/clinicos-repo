@@ -417,23 +417,44 @@ class TestSystemPrompt:
         "trecho",
         [
             "oftalmológica",  # persona
-            "SEMPRE chame a ferramenta",  # regra dura de tool use
+            "ferramentas",  # instrução de tool use
             "NUNCA invente",  # anti-alucinação
-            "não há disponibilidade",  # dizer que não achou
-            "atendimento humano",  # encaminhamento
-            "urgência",  # protocolo oftalmológico
         ],
     )
-    def test_cobre_os_guardrails_obrigatorios(self, trecho):
+    def test_cobre_o_essencial(self, trecho):
         assert trecho in SYSTEM_PROMPT
 
-    def test_recusa_conduta_medica(self):
-        for termo in ("diagnóstico", "receita", "dosagem"):
-            assert termo in SYSTEM_PROMPT
+    def test_precisa_permanecer_curto(self):
+        """**Este teste é um guarda de comportamento, não de estilo.**
 
-    def test_cabe_no_orcamento_de_contexto(self):
-        """Contexto real de 4096 tokens; o system prompt não pode comer tudo."""
-        assert len(SYSTEM_PROMPT) < 4000
+        Em modelo pequeno, cada instrução extra no system prompt disputa
+        atenção com a decisão de usar ferramenta. Medido com `qwen2.5:3b` e as
+        três ferramentas registradas::
+
+            prompt de 2.935 chars -> chamou ferramenta em 0/5
+            prompt de   230 chars -> chamou ferramenta em 4/6
+
+        Com o prompt longo o modelo passou a responder de memória sobre
+        convênio e estacionamento — a alucinação que o texto tentava impedir.
+
+        Se este teste ficar vermelho, **meça o tool use antes de subir o
+        limite**. O lugar de regra específica é a `description` da ferramenta.
+        """
+        assert len(SYSTEM_PROMPT) < 600, (
+            f"System prompt com {len(SYSTEM_PROMPT)} chars. Prompt longo derruba "
+            "o tool use — ver docstring deste teste."
+        )
+
+    def test_guardrails_clinicos_nao_moram_no_prompt(self):
+        """Recusa de conduta médica é determinística, em `guardrails.py`.
+
+        Regra em prompt é negociável por prompt injection; regra em código não
+        é. Além disso, cada frase gasta aqui custa tool use.
+        """
+        from apps.chatbot import guardrails
+
+        assert guardrails.interceptar("me dá uma receita de colírio") is not None
+        assert guardrails.interceptar("perdi a visão") is not None
 
 
 class TestMontarMensagens:
