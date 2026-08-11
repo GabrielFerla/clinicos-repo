@@ -180,6 +180,49 @@ class TestChatService:
         assert _texto(pares) == "Olá! Como ajudo?"
         assert cliente.chamadas_stream == [], "não deveria ter feito a 2ª chamada"
 
+    def test_faq_e_acionada_pelo_servidor_quando_o_modelo_pula_a_ferramenta(self):
+        """Rede de segurança do grounding.
+
+        O `tool_choice="required"` é ignorado pelo Ollama, e em ~10% dos turnos
+        o modelo responde de memória — chegando a negar que a clínica tenha
+        estacionamento. Quando isso acontece e existe FAQ relevante, o servidor
+        consulta por conta própria e a resposta é refeita em cima do dado real.
+        """
+
+        class FaqFalsa(_ToolFalsa):
+            name = "buscar_faq"
+
+            def execute(self, **kwargs):
+                return {"encontrou": True, "resultados": [{"faq_id": 1, "resposta": "R$ 350,00"}]}
+
+        cliente = FakeLLMClient(
+            respostas=[RespostaLLM(texto="Não tenho informação sobre preços.")],
+            fragmentos=[FragmentoStream.token("A consulta custa R$ 350,00.")],
+        )
+        conversa = uuid.uuid4()
+        servico = ChatService(cliente=cliente, registry=ToolRegistry([FaqFalsa()]))
+        pares = _eventos(servico.responder(pergunta="Quanto custa?", conversa_id=conversa))
+
+        assert _texto(pares) == "A consulta custa R$ 350,00."
+        assert InteracaoChat.objects.get(conversa_id=conversa).tools_usadas == [
+            "buscar_faq:fallback"
+        ]
+
+    def test_fallback_nao_dispara_sem_faq_relevante(self):
+        """Saudação e agradecimento não podem virar consulta ao FAQ."""
+
+        class FaqVazia(_ToolFalsa):
+            name = "buscar_faq"
+
+            def execute(self, **kwargs):
+                return {"encontrou": False, "resultados": []}
+
+        cliente = FakeLLMClient(respostas=[RespostaLLM(texto="Olá! Como ajudo?")])
+        pares = self._rodar(cliente, registry=ToolRegistry([FaqVazia()]), pergunta="Bom dia!")
+
+        assert _texto(pares) == "Olá! Como ajudo?"
+        assert cliente.chamadas_stream == []
+
     def test_com_tool_executa_e_streama_a_resposta_final(self):
         cliente = FakeLLMClient(
             respostas=[RespostaLLM(tool_calls=[ToolCall(id="c1", nome="buscar_slots")])],

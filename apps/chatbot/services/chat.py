@@ -170,25 +170,43 @@ class ChatService:
         mensagens = montar_mensagens(SYSTEM_PROMPT, historico, pergunta)
         schemas = self._registry.schemas()
 
-        # `required` em vez de `auto`, e isto é a decisão de grounding mais
-        # importante do serviço.
+        # `tool_choice="required"` é passado, mas **não confie nele**: o Ollama
+        # 0.30.10 o aceita e ignora — medido, 0/5 tanto com `required` quanto
+        # com `auto` num teste isolado. Fica aqui porque é o valor correto do
+        # protocolo e passa a valer sozinho quando o provedor implementar.
         #
-        # Com `auto`, o `qwen2.5:3b` decide de forma instável se consulta o
-        # banco — e quando não consulta, responde de memória com convicção.
-        # Medido: sem histórico chamou ferramenta em 3/4 perguntas de FAQ; com
-        # um único turno anterior, 2/4. E a falha não é silenciosa: ele afirmou
-        # "Não tem estacionamento na clínica", o oposto do que a FAQ diz.
-        #
-        # `required` obriga a escolher **alguma** ferramenta; qual, continua com
-        # o modelo. O custo é uma consulta desnecessária em saudação, que sai
-        # por uma busca vetorial de menos de 1 ms. O ganho é o princípio do
-        # projeto valer sempre: "todo dado vem de query real via Tool Use".
+        # Com as três ferramentas registradas o modelo chama alguma em ~90% dos
+        # turnos (18/20 medido). Os 10% restantes são cobertos pelo fallback
+        # logo abaixo — não por prompt: acrescentar uma instrução de reforço
+        # PIOROU o índice (12/16 contra 14/16), coerente com o resto do que se
+        # mediu sobre tamanho de prompt neste modelo.
         decisao = self._cliente.conversar(mensagens, tools=schemas, tool_choice="required")
         registro.somar_tokens(decisao)
 
         if not decisao.pediu_tool:
-            # Texto já pronto. Uma segunda chamada só dobraria a latência e
-            # abriria espaço para o modelo inventar algo que ninguém pediu.
+            # Rede de segurança do grounding: o modelo decidiu responder de
+            # memória. Antes de aceitar isso, o **servidor** consulta o FAQ por
+            # conta própria. Se houver resposta relevante, o turno continua como
+            # se a ferramenta tivesse sido chamada.
+            #
+            # É o que impede o pior caso observado: o modelo afirmando "não
+            # tenho informações sobre os preços" quando a FAQ tem o valor, ou
+            # "não tem estacionamento" quando tem. Determinístico, e custa uma
+            # busca vetorial de menos de 1 ms.
+            forcada = self._buscar_faq_de_seguranca(pergunta)
+            if forcada is not None:
+                logger.info("Modelo não chamou ferramenta; FAQ acionada pelo servidor.")
+                yield sse.status("Procurando na base de informações…")
+                registro.registrar_tool("buscar_faq:fallback", forcada)
+                mensagens.append(
+                    {"role": "system", "content": f"Dados da clínica para responder: {forcada}"}
+                )
+                yield from self._streamar_resposta(mensagens, schemas, registro)
+                return
+
+            # Texto já pronto e sem FAQ relevante (saudação, agradecimento,
+            # pedido de esclarecimento). Uma segunda chamada só dobraria a
+            # latência e abriria espaço para inventar algo que ninguém pediu.
             yield sse.status("")
             for fragmento in _PALAVRAS.findall(decisao.texto):
                 yield sse.token(fragmento)
@@ -203,6 +221,19 @@ class ChatService:
             registro.registrar_tool(chamada.nome, resultado)
             mensagens.append({"role": "tool", "tool_call_id": chamada.id, "content": resultado})
 
+        yield from self._streamar_resposta(mensagens, schemas, registro)
+
+    def _streamar_resposta(
+        self,
+        mensagens: list[dict[str, Any]],
+        schemas: list[dict[str, Any]],
+        registro: _RegistroTurno,
+    ) -> Iterator[str]:
+        """Faz a chamada final em streaming e emite os tokens.
+
+        Os `schemas` seguem na chamada mesmo sem poder ser usados aqui: omiti-los
+        degrada a decisão de ferramenta do **turno seguinte**.
+        """
         yield sse.status("Escrevendo a resposta…")
         partes: list[str] = []
         primeiro = True
@@ -223,6 +254,24 @@ class ChatService:
             logger.warning(
                 "Possível alucinação na conversa %s: %s", registro.conversa_id, registro.alucinacoes
             )
+
+    def _buscar_faq_de_seguranca(self, pergunta: str) -> str | None:
+        """Consulta o FAQ sem passar pelo modelo. ``None`` se nada for relevante.
+
+        Usado quando o modelo decide responder de memória. O corte de relevância
+        é o mesmo da ferramenta, então saudação e agradecimento não disparam
+        nada — só pergunta que de fato tem resposta na base.
+        """
+        try:
+            bruto = self._registry.executar("buscar_faq", {"pergunta": pergunta})
+        except Exception:  # noqa: BLE001 — rede de segurança não pode derrubar o turno
+            logger.exception("Falha no fallback de FAQ")
+            return None
+        try:
+            dados = json.loads(bruto)
+        except ValueError:
+            return None
+        return bruto if dados.get("encontrou") else None
 
     def _persistir(self, registro: _RegistroTurno) -> None:
         """Grava a auditoria do turno. Nunca derruba a resposta já entregue."""
