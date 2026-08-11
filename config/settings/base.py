@@ -336,10 +336,15 @@ LLM_MAX_TOOL_ITERACOES = env.int("LLM_MAX_TOOL_ITERACOES", default=2)
 # FAQ_VECTOR.EMBEDDING não muda.
 EMBEDDING_PROVIDER = env("EMBEDDING_PROVIDER", default="ollama")
 EMBEDDING_BASE_URL = env("EMBEDDING_BASE_URL", default="http://host.docker.internal:11434")
-EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="all-minilm")
+# Multilíngue, e não o `all-minilm` do spike. Aquele é treinado em inglês e,
+# medido contra a FAQ da clínica, casava por sobreposição lexical em português
+# ("que horas vocês abrem?" trazia "Vocês atendem pelo SUS?"). Numa baseline de
+# 8 paráfrases: all-minilm 6/8, paraphrase-multilingual 8/8.
+EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="paraphrase-multilingual")
 # Precisa bater com a dimensão declarada na migration da coluna VECTOR.
-# Mudar aqui sem migrar + reindexar devolve resultado errado silenciosamente.
-EMBEDDING_DIM = env.int("EMBEDDING_DIM", default=384)
+# Mudar aqui sem migrar + reindexar devolve resultado errado silenciosamente —
+# é o que `FaqVector.embedding_dim` e a checagem do repositório protegem.
+EMBEDDING_DIM = env.int("EMBEDDING_DIM", default=768)
 
 # Teto de duração de um turno de chat (rede de segurança para não prender
 # worker indefinidamente) e de histórico reenviado ao modelo. O contexto real

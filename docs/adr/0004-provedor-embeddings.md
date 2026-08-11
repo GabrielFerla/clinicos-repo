@@ -1,8 +1,69 @@
 # ADR-0004: Provedor de embeddings
 
-- **Status:** 🟡 Partially decided — preliminar para spike; decisão final na Sprint 5
-- **Data:** 2026-05-23
-- **Decisor(es):** Dev lead, após Checkpoint 3 da Sprint 0
+- **Status:** 🟢 Decided (MVP1) — `paraphrase-multilingual` servido pelo Ollama, 768 dimensões
+- **Data:** 2026-05-23 · **Revisado em:** 2026-08-11
+- **Decisor(es):** Dev lead, após Checkpoint 3 da Sprint 0; revisto na implementação do chat MVP
+
+---
+
+## Decisão (revisão de 2026-08-11)
+
+> **Opção E — modelo local servido pelo Ollama, e não empacotado no Django.**
+> Modelo: **`paraphrase-multilingual`** (768 dimensões).
+
+Duas mudanças em relação à decisão preliminar, ambas medidas e não estimadas.
+
+### 1. O runtime muda: Ollama em vez de `sentence-transformers`
+
+O modelo continua local. Muda **quem o serve**: em vez de importar
+`sentence-transformers` dentro do Django, o embedding é gerado por uma chamada
+HTTP ao Ollama, que já está no ambiente por causa do LLM.
+
+| | `sentence-transformers` embarcado | Ollama |
+|---|---|---|
+| Imagem do Django | +2,3 GB (`torch`) | 0 |
+| RSS em runtime | +600 MB a 1 GB por worker | ~60 MB, no processo do Ollama |
+| Build | ~10 min | inalterado |
+| Latência (quente) | ~10 ms | 20-50 ms |
+
+Numa máquina com 7,7 GB de RAM disputados por Oracle, Ollama e Django, o
+ganho de memória vale muito mais que os 30 ms.
+
+### 2. O modelo muda: multilíngue, e a dimensão vai para 768
+
+O `all-MiniLM-L6/L12` é treinado em inglês. Medido contra a FAQ real da clínica,
+ele casa por **sobreposição lexical** em português, não por semântica:
+
+```
+"que horas vocês abrem?"  →  "Vocês atendem pelo SUS?"    (compartilha "Vocês")
+"horário de atendimento"  →  "Vocês aceitam convênio?"
+```
+
+Só a paráfrase quase literal funcionava. Baseline de 8 perguntas escritas como
+um paciente escreveria (a mesma que virou teste em `apps/chatbot/test_faq_repository.py`):
+
+| Modelo | Dim | Acerto no top-1 |
+|---|---:|---:|
+| `all-minilm` | 384 | 6/8 |
+| **`paraphrase-multilingual`** | **768** | **8/8** |
+
+Como a busca semântica é o diferencial técnico do projeto, 6/8 em paráfrase não
+serve. O custo de trocar agora — migration `0004_embedding_multilingue_768` e
+re-embedding de 20 linhas — é desprezível perto do custo de trocar depois.
+
+**Consequências:** `VECTOR(768, FLOAT32)`; `EMBEDDING_DIM=768`; qualquer
+mudança futura de modelo exige migration + `reindexar_faq --forcar`.
+`FaqVector.embedding_modelo` / `embedding_dim` existem para tornar essa
+divergência detectável — sem eles, consultar com um modelo diferente do
+indexado devolve ranking errado **sem erro nenhum**.
+
+### O que segue em aberto (MVP2)
+
+ONNX-in-Oracle e provedores pagos (Voyage, OpenAI) continuam não avaliados —
+o primeiro por causa da URL expirada, os demais por falta de chave. Nenhum é
+necessário para o MVP1.
+
+---
 
 ## Contexto
 

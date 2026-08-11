@@ -31,11 +31,15 @@ from apps.chatbot.services.embeddings import (
 
 TEXTO = "A clínica atende convênio?"
 
-# Valor congelado: os três primeiros floats de ``FakeEmbeddingProvider`` (384
-# dimensões) para :data:`TEXTO`. Serve de detector de mudança no algoritmo —
+# Valor congelado: os três primeiros floats de ``FakeEmbeddingProvider`` para
+# :data:`TEXTO`, com **dimensão 8**. Serve de detector de mudança no algoritmo —
 # trocar SHA-256 por ``hash()``, mudar a expansão de bytes ou a normalização
 # muda estes números, e qualquer índice gerado antes vira lixo.
-GOLDEN = [0.041922802422889996, -0.014613704640445422, 0.08165050802279887]
+#
+# A dimensão é fixada em 8, e não na de produção, para a âncora sobreviver a
+# uma troca do modelo de embedding (o vetor é normalizado L2, então mudar a
+# dimensão mudaria todos os valores).
+GOLDEN_DIM8 = [0.29112185436241267, -0.10148102102325501, 0.567000437266847]
 
 
 def _transporte(resposta: dict | Exception):
@@ -59,10 +63,16 @@ class TestFakeEmbeddingProvider:
         assert isinstance(FakeEmbeddingProvider(), EmbeddingProvider)
 
     def test_usa_a_dimensao_das_settings(self, settings):
+        """A dimensão vem do settings — não pode ser fixada no teste.
+
+        Fixar o número aqui faria o teste reprovar a cada troca de modelo de
+        embedding, que é uma mudança legítima e prevista pelo ADR-0004.
+        """
+        settings.EMBEDDING_DIM = 256
         vetores = FakeEmbeddingProvider().gerar([TEXTO])
 
         assert len(vetores) == 1
-        assert len(vetores[0]) == settings.EMBEDDING_DIM == 384
+        assert len(vetores[0]) == 256
 
     def test_dimensao_pode_ser_sobrescrita(self):
         assert len(FakeEmbeddingProvider(dim=8).gerar(["x"])[0]) == 8
@@ -74,10 +84,15 @@ class TestFakeEmbeddingProvider:
         assert FakeEmbeddingProvider().gerar([TEXTO]) == provedor.gerar([TEXTO])
 
     def test_e_estavel_entre_execucoes(self):
-        """Deriva de SHA-256, não de ``hash()`` (aleatorizado por processo)."""
-        vetor = FakeEmbeddingProvider().gerar([TEXTO])[0]
+        """Deriva de SHA-256, não de ``hash()`` (aleatorizado por processo).
 
-        assert vetor[:3] == pytest.approx(GOLDEN, abs=1e-12)
+        A âncora é uma dimensão fixa e pequena, e não a dimensão de produção:
+        assim o valor esperado não precisa ser regerado quando o modelo de
+        embedding muda — o que aconteceria a cada revisão do ADR-0004.
+        """
+        vetor = FakeEmbeddingProvider(dim=8).gerar([TEXTO])[0]
+
+        assert vetor[:3] == pytest.approx(GOLDEN_DIM8, abs=1e-12)
 
     def test_textos_diferentes_geram_vetores_diferentes(self):
         primeiro, segundo = FakeEmbeddingProvider().gerar([TEXTO, "outro texto"])

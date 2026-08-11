@@ -1,9 +1,19 @@
+# Portas publicadas no host são parametrizáveis para a stack conviver com
+# outros projetos na mesma máquina. Os defaults de Redis (6380) e Mailhog
+# (1026/8026) já saem deslocados de propósito, porque são as imagens mais
+# comuns de já estarem rodando. Para mudar, defina no `.env`:
+#
+#     ORACLE_PORT=1522
+#     DJANGO_PORT=8001
+#
+# Isso é só o mapeamento host→container; a comunicação entre serviços continua
+# pelos nomes (`oracle:1521`, `redis:6379`) e não muda.
 services:
   oracle:
     image: gvenzl/oracle-free:23-slim
     container_name: clinicos-oracle
     ports:
-      - "1521:1521"
+      - "${ORACLE_PORT:-1521}:1521"
     environment:
       ORACLE_PASSWORD: oracle
       APP_USER: clinicos
@@ -22,7 +32,7 @@ services:
     image: redis:7-alpine
     container_name: clinicos-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6380}:6379"
     volumes:
       - redis-data:/data
     command: ["redis-server", "--appendonly", "yes"]
@@ -31,8 +41,8 @@ services:
     image: mailhog/mailhog
     container_name: clinicos-mailhog
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "${MAILHOG_SMTP_PORT:-1026}:1025"
+      - "${MAILHOG_UI_PORT:-8026}:8025"
 
   django:
     build:
@@ -43,7 +53,7 @@ services:
     volumes:
       - ./:/app
     ports:
-      - "8000:8000"
+      - "${DJANGO_PORT:-8000}:8000"
     # O LLM e os embeddings rodam no Ollama do HOST, não num container.
     # `host.docker.internal` é o caminho suportado no Docker Desktop/WSL2 —
     # `network_mode: host` quebra o port forwarding para o browser (o "host"
@@ -73,7 +83,7 @@ services:
       LLM_BASE_URL: http://host.docker.internal:11434/v1
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
       EMBEDDING_BASE_URL: http://host.docker.internal:11434
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-minilm}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-paraphrase-multilingual}
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
 
