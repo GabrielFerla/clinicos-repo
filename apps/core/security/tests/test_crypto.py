@@ -18,7 +18,6 @@ from cryptography.exceptions import InvalidTag
 
 from apps.core.security.crypto import CPFCipher, InvalidKeyError
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

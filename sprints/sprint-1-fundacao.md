@@ -36,10 +36,10 @@
   - [ ] FaqVector
   - [ ] Usuario (User custom)
   - [ ] LogAcesso
-- [ ] **S1-9** Migrations Oracle de todas as tabelas base, com índices · **DB** · 5h
+- [x] **S1-9** Migrations Oracle de todas as tabelas base, com índices · **DB** · 5h
 - [ ] **S1-10** Trigger PL/SQL de imutabilidade em `EVOLUCAO` via RunPython · **DB** · 3h
-- [ ] **S1-11** Constraint UNIQUE de slot + script de teste · **DB** · 2h
-- [ ] **S1-12** Criação do índice HNSW em `FAQ_VECTOR.EMBEDDING` · **DB** · 1h
+- [x] **S1-11** Constraint UNIQUE de slot + script de teste · **DB** · 2h
+- [x] **S1-12** Criação do índice HNSW em `FAQ_VECTOR.EMBEDDING` · **DB** · 1h
 
 ### Helpers e segurança
 - [x] **S1-13** Helper de criptografia AES-256 para CPF · **BACK** · 3h

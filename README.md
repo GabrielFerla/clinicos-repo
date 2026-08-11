@@ -36,9 +36,11 @@ clinicos/
 ├── README.md                  ← você está aqui
 ├── CONTRIBUTING.md            ← como trabalhar neste repositório
 ├── docs/
+│   ├── STATUS.md             ← o que existe de fato no código, hoje (vivo)
 │   ├── PLANO.md              ← documento mestre do projeto (vivo)
 │   ├── ESCOPO.md             ← escopo do MVP1 + lista de fora-de-escopo
 │   ├── ARQUITETURA.md        ← detalhes técnicos, modelo de dados, decisões
+│   ├── CHAT_MVP.md           ← guia de implementação do chatbot (fatia vertical)
 │   ├── METRICAS.md           ← métricas de sucesso e como medi-las
 │   ├── RISCOS.md             ← registro vivo de riscos do projeto
 │   └── adr/                  ← Architecture Decision Records
@@ -75,9 +77,10 @@ Sobe Oracle 23ai + Redis + Mailhog + Django, aplica migrations e cria superuser 
 **Se você está chegando agora ao projeto:**
 
 1. Leia este README até o fim
-2. Leia [`docs/PLANO.md`](docs/PLANO.md) — visão completa
-3. Leia [`docs/adr/`](docs/adr/) — entenda as decisões tomadas
-4. Leia [`sprints/sprint-0-validacao.md`](sprints/sprint-0-validacao.md) — primeiro trabalho prático
+2. Leia [`docs/STATUS.md`](docs/STATUS.md) — **o que já existe no código e o que ainda não roda**
+3. Leia [`docs/PLANO.md`](docs/PLANO.md) — visão completa
+4. Leia [`docs/adr/`](docs/adr/) — entenda as decisões tomadas
+5. Leia [`sprints/sprint-0-validacao.md`](sprints/sprint-0-validacao.md) — primeiro trabalho prático
 
 **Se você é o cliente piloto:**
 

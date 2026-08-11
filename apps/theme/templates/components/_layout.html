@@ -1,3 +1,4 @@
+{% extends "base.html" %}
 {% comment %}
   Layout base do ClinicOS — componente reutilizável.
 
@@ -5,12 +6,17 @@
   específicos preencham apenas o conteúdo principal. Use assim:
 
       {% extends "components/_layout.html" %}
-      {% block content %}<h1 class="text-2xl">Olá</h1>{% endblock %}
+      {% block main %}<h1 class="text-2xl">Olá</h1>{% endblock %}
 
   As variantes (sidebar, header etc.) devem ser criadas como outros componentes
   ao longo das próximas sprints — este aqui é o esqueleto mínimo.
+
+  Atenção: `{% templatetag openblock %} extends {% templatetag closeblock %}`
+  precisa ser a **primeira tag** do arquivo. Este comentário já esteve acima
+  dele, e o Django recusava o template inteiro com
+  `TemplateSyntaxError: must be the first tag`. Como nenhuma página usava este
+  layout até a Sprint 5, o defeito ficou invisível desde a S1-17.
 {% endcomment %}
-{% extends "base.html" %}
 
 {% block content %}
   <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">

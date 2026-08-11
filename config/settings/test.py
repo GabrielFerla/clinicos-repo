@@ -44,6 +44,22 @@ CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
 # ---------------------------------------------------------------------------
+# IA: nada de rede na suíte padrão
+# ---------------------------------------------------------------------------
+# Sem estes dois overrides, a suíte herda `ollama` da base e passa a depender
+# de um serviço externo **sem declarar isso**. O sintoma é traiçoeiro: em
+# máquina de dev, onde o container alcança o Ollama, os testes ficam verdes por
+# acidente; no CI, que não tem GPU nem Ollama, quebram com
+# `URLError: Name or service not known`. Foi exatamente assim que dois testes
+# de `buscar_faq` passaram local e reprovaram no CI.
+#
+# Os testes que **precisam** do modelo real são explícitos: marcados com
+# `@pytest.mark.llm` e instanciando o provedor Ollama à mão. Rode com
+# `make test-llm`.
+LLM_PROVIDER = "fake"
+EMBEDDING_PROVIDER = "fake"
+
+# ---------------------------------------------------------------------------
 # Banco de testes
 # ---------------------------------------------------------------------------
 # Override total do DATABASES — SQLite em memória, rápido e sem dependência

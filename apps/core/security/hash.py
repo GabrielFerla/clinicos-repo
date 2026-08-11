@@ -15,7 +15,6 @@ import hashlib
 import hmac
 import re
 
-
 _CPF_DIGITS_RE = re.compile(r"\D+")
 
 

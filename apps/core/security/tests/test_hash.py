@@ -18,7 +18,6 @@ import pytest
 
 from apps.core.security.hash import cpf_hash, normalize_cpf, verify_cpf_hash
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -257,9 +256,7 @@ def test_verify_cpf_hash_mismatch_returns_false(pepper: bytes) -> None:
     assert verify_cpf_hash("12345678901", h, pepper) is False
 
 
-def test_verify_cpf_hash_wrong_pepper_returns_false(
-    pepper: bytes, other_pepper: bytes
-) -> None:
+def test_verify_cpf_hash_wrong_pepper_returns_false(pepper: bytes, other_pepper: bytes) -> None:
     h = cpf_hash("12345678900", pepper)
     assert verify_cpf_hash("12345678900", h, other_pepper) is False
 

@@ -5,8 +5,21 @@
 Django>=5.1,<5.2
 django-environ>=0.11,<1.0
 django-tailwind[reload]>=3.8
-oracledb>=2.4
+# Teto obrigatório: o backend Oracle do Django 5.1 assume `oracledb.Binary`
+# como *tipo* (usa em `isinstance`). Da série 3.x em diante ele virou função, e
+# QUALQUER query estoura com `TypeError: isinstance() arg 2 must be a type`.
+# Só suba este teto junto com a versão do Django, testando contra o Oracle.
+oracledb>=2.5,<3.0
 redis>=5.0
 celery>=5.4,<6.0
 gunicorn>=22.0
 cryptography>=42.0
+
+# Chatbot (Sprint 5). O cliente da OpenAI é usado para falar com o **Ollama
+# local**, que expõe um endpoint compatível (/v1/chat/completions) — não há
+# chamada a serviço pago. Ver docs/CHAT_MVP.md e ADR-0006.
+#
+# Os embeddings também saem do Ollama, de propósito: `sentence-transformers`
+# arrastaria `torch` (~2,3 GB) para dentro desta imagem sem ganho de qualidade
+# relevante para uma FAQ de clínica.
+openai>=1.50,<2.0

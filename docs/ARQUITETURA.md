@@ -121,7 +121,8 @@ CREATE TABLE FAQ_VECTOR (
     ID NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     PERGUNTA VARCHAR2(500) NOT NULL,
     RESPOSTA CLOB NOT NULL,
-    EMBEDDING VECTOR(1024, FLOAT32),  -- dim conforme provedor escolhido
+    EMBEDDING VECTOR(384, FLOAT32),   -- 384 = all-MiniLM (ADR-0004). Mudar a dimensão
+                                      -- exige migration + re-embedding de tudo.
     CRIADO_EM TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

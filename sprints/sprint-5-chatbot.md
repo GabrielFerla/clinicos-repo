@@ -13,29 +13,29 @@
 ## Tarefas
 
 ### Componente de chat no site
-- [ ] **S5-1** Componente HTMX de chat com streaming via SSE · **FRONT** · 8h
-- [ ] **S5-2** Estado da conversa persistido em sessão (não perde se recarregar) · **FRONT+BACK** · 4h
-- [ ] **S5-3** Indicador "digitando" enquanto LLM processa · **FRONT** · 2h
+- [x] **S5-1** Componente HTMX de chat com streaming via SSE · **FRONT** · 8h
+- [x] **S5-2** Estado da conversa persistido em sessão (não perde se recarregar) · **FRONT+BACK** · 4h
+- [x] **S5-3** Indicador "digitando" enquanto LLM processa · **FRONT** · 2h
 - [ ] **S5-4** Animação suave de aparição dos tokens · **FRONT** · 2h
 - [ ] **S5-5** Botão "Falar com atendente" como fallback humano · **FRONT** · 2h
 
 ### ChatService e arquitetura
-- [ ] **S5-6** Service Django `ChatService` orquestrando turnos da conversa · **BACK+AI** · 8h
-- [ ] **S5-7** Prompt de sistema com persona da clínica e guardrails · **AI** · 6h
+- [x] **S5-6** Service Django `ChatService` orquestrando turnos da conversa · **BACK+AI** · 8h
+- [x] **S5-7** Prompt de sistema com persona da clínica e guardrails · **AI** · 6h
 - [ ] **S5-8** Mecanismo de retry e fallback se Claude API falhar · **BACK+AI** · 4h
 
 ### Tools (cada uma é uma classe com schema + execute)
-- [ ] **S5-9** Tool: `listar_especialidades_disponiveis()` · **AI** · 2h
-- [ ] **S5-10** Tool: `buscar_slots(especialidade, periodo_preferido)` · **AI** · 4h
+- [x] **S5-9** Tool: `listar_especialidades_disponiveis()` · **AI** · 2h
+- [x] **S5-10** Tool: `buscar_slots(especialidade, periodo_preferido)` · **AI** · 4h
 - [ ] **S5-11** Tool: `triagem_oftalmologica(sintomas)` — sugere especialidade · **AI** · 5h
 - [ ] **S5-12** Tool: `criar_lead_e_consulta(dados_paciente, slot_id)` · **AI+BACK** · 6h
-- [ ] **S5-13** Tool: `buscar_faq(pergunta)` usando `VECTOR_DISTANCE` no Oracle · **AI+DB** · 5h
+- [x] **S5-13** Tool: `buscar_faq(pergunta)` usando `VECTOR_DISTANCE` no Oracle · **AI+DB** · 5h
 - [ ] **S5-14** Tool: `cancelar_consulta_recente(email, telefone)` (limitado a 1h após criar) · **AI+BACK** · 4h
 
 ### Ingestão de FAQ e Vector Search
-- [ ] **S5-15** Pipeline de ingestão: ler FAQ do site → gerar embeddings → popular `FAQ_VECTOR` · **AI** · 5h
-- [ ] **S5-16** Command Django `reindexar_faq` para reprocessar quando FAQ mudar · **AI+BACK** · 3h
-- [ ] **S5-17** Testes de relevância da busca semântica (10 queries de baseline) · **QA+AI** · 4h
+- [x] **S5-15** Pipeline de ingestão: ler FAQ do site → gerar embeddings → popular `FAQ_VECTOR` · **AI** · 5h
+- [x] **S5-16** Command Django `reindexar_faq` para reprocessar quando FAQ mudar · **AI+BACK** · 3h
+- [x] **S5-17** Testes de relevância da busca semântica (10 queries de baseline) · **QA+AI** · 4h
 
 ### Anti-abuso
 - [ ] **S5-18** Rate limiting por IP no endpoint do chat · **BACK** · 3h
@@ -50,7 +50,7 @@
 - [ ] **S5-25** Dashboard simples no Admin com contagem por etapa · **FRONT** · 4h
 
 ### Auditoria e custos
-- [ ] **S5-26** Model `InteracaoChat` registrando cada turno + tokens + custo estimado · **BACK** · 3h
+- [x] **S5-26** Model `InteracaoChat` registrando cada turno + tokens + custo estimado · **BACK** · 3h
 - [ ] **S5-27** View de auditoria de conversas no Admin (somente leitura) · **FRONT+BACK** · 3h
 - [ ] **S5-28** Métrica custom: custo médio por agendamento · **BACK** · 2h
 

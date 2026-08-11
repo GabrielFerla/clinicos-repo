@@ -153,16 +153,51 @@ TEMPLATES = [
 # Banco de dados (Oracle 23ai)
 # ---------------------------------------------------------------------------
 # ``env.db_url`` faz o parsing de ``DATABASE_URL`` no formato
-# ``oracle://user:password@host:port/?service_name=PDB`` e devolve o dict no
-# formato esperado pelo Django. O default aponta para o serviço ``oracle`` do
-# compose, evitando explosão silenciosa em ``manage.py check`` — qualquer
-# operação real ainda precisa do Oracle no ar.
+# ``oracle://user:password@host:port/SERVICE_NAME``. O default aponta para o
+# serviço ``oracle`` do compose, evitando explosão silenciosa em
+# ``manage.py check`` — qualquer operação real ainda precisa do Oracle no ar.
 DATABASES = {
     "default": env.db_url(
         "DATABASE_URL",
-        default="oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1",
+        default="oracle://clinicos:oracle@oracle:1521/FREEPDB1",
     ),
 }
+
+
+def _normalizar_dsn_oracle(cfg: dict) -> None:
+    """Converte HOST/PORT/NAME para uma string EZConnect no ``NAME``.
+
+    O backend Oracle do Django monta o DSN assim (``django/db/backends/oracle/
+    base.py``)::
+
+        if settings_dict["PORT"]:
+            return makedsn(host, int(port), settings_dict["NAME"])
+        return settings_dict["NAME"]
+
+    O terceiro argumento de ``makedsn`` é o **SID**, não o service name. Como o
+    Oracle 23ai Free expõe o PDB por *service name* (``FREEPDB1``), deixar
+    ``PORT`` preenchido produz ``DPY-6003: SID "FREEPDB1" is not registered``.
+
+    Esvaziando ``PORT`` e passando ``host:port/service`` em ``NAME``, o Django
+    devolve a string intacta e o ``python-oracledb`` a interpreta como
+    EZConnect — onde o que vem depois da barra é o service name. É o caminho
+    suportado para PDB.
+
+    Nota: não adianta pôr ``service_name`` em ``OPTIONS``. Aquele dict é
+    repassado como ``**kwargs`` para ``oracledb.connect()`` junto com o ``dsn``,
+    o que é ambíguo. É também por isso que a URL usa ``/FREEPDB1`` no path e não
+    ``?service_name=FREEPDB1``: para Oracle com path vazio, o django-environ
+    move o hostname para ``NAME`` e **zera o HOST**, e a conexão vai parar em
+    localhost.
+    """
+    if "oracle" not in cfg.get("ENGINE", "") or not cfg.get("PORT"):
+        return
+    host = (cfg.get("HOST") or "localhost").strip()
+    cfg["NAME"] = f"{host}:{cfg['PORT']}/{cfg['NAME']}"
+    cfg["PORT"] = ""
+
+
+_normalizar_dsn_oracle(DATABASES["default"])
 
 
 # ---------------------------------------------------------------------------
@@ -267,3 +302,53 @@ CPF_ENCRYPTION_KEY = env("CPF_ENCRYPTION_KEY", default=None)
 # sem expor o valor em claro). S1-14 implementa o helper. Mesma origem que
 # ``CPF_ENCRYPTION_KEY``: secret manager em prod, ``.env`` em dev.
 CPF_HASH_PEPPER = env("CPF_HASH_PEPPER", default=None)
+
+
+# ---------------------------------------------------------------------------
+# Chatbot — LLM e embeddings (Sprint 5)
+# ---------------------------------------------------------------------------
+# No MVP1 o LLM roda **local, via Ollama**, pelo endpoint compatível com a API
+# da OpenAI. O compromisso do projeto com a Anthropic (README, ADR-0002) segue
+# de pé — ver ``docs/CHAT_MVP.md``. O código fala com uma interface
+# (``apps.chatbot.services.llm.base.LLMClient``), então trocar o provedor é
+# mudar ``LLM_PROVIDER``, não reescrever o ``ChatService``.
+
+LLM_PROVIDER = env("LLM_PROVIDER", default="ollama")
+LLM_BASE_URL = env("LLM_BASE_URL", default="http://host.docker.internal:11434/v1")
+# O cliente OpenAI recusa api_key vazia; o Ollama ignora o valor.
+LLM_API_KEY = env("LLM_API_KEY", default="ollama")
+
+# IMPORTANTE: use um modelo **sem "thinking"**. Modelos da família qwen3
+# raciocinam antes de responder e não há como desligar isso pela API (medido:
+# `think:false`, `enable_thinking` e `/no_think` são todos ignorados ou fazem
+# o raciocínio vazar como resposta). Na prática isso vira de 8 a 45 segundos
+# de tela em branco. Ver docs/CHAT_MVP.md §4.2.
+LLM_MODEL = env("LLM_MODEL", default="qwen2.5:3b")
+LLM_TEMPERATURE = env.float("LLM_TEMPERATURE", default=0.1)
+LLM_TIMEOUT_SEGUNDOS = env.int("LLM_TIMEOUT_SEGUNDOS", default=120)
+# Quantas rodadas de tool call são permitidas antes de forçar a resposta final.
+# Segura loop de modelo que fica repedindo a mesma ferramenta.
+LLM_MAX_TOOL_ITERACOES = env.int("LLM_MAX_TOOL_ITERACOES", default=2)
+
+# Embeddings também via Ollama — evita arrastar torch/sentence-transformers
+# (~2,3 GB) para dentro da imagem Django. `all-minilm` é a mesma família
+# escolhida no ADR-0004 e produz **384 dimensões**, então a coluna
+# FAQ_VECTOR.EMBEDDING não muda.
+EMBEDDING_PROVIDER = env("EMBEDDING_PROVIDER", default="ollama")
+EMBEDDING_BASE_URL = env("EMBEDDING_BASE_URL", default="http://host.docker.internal:11434")
+# Multilíngue, e não o `all-minilm` do spike. Aquele é treinado em inglês e,
+# medido contra a FAQ da clínica, casava por sobreposição lexical em português
+# ("que horas vocês abrem?" trazia "Vocês atendem pelo SUS?"). Numa baseline de
+# 8 paráfrases: all-minilm 6/8, paraphrase-multilingual 8/8.
+EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="paraphrase-multilingual")
+# Precisa bater com a dimensão declarada na migration da coluna VECTOR.
+# Mudar aqui sem migrar + reindexar devolve resultado errado silenciosamente —
+# é o que `FaqVector.embedding_dim` e a checagem do repositório protegem.
+EMBEDDING_DIM = env.int("EMBEDDING_DIM", default=768)
+
+# Teto de duração de um turno de chat (rede de segurança para não prender
+# worker indefinidamente) e de histórico reenviado ao modelo. O contexto real
+# do Ollama é 4096 tokens, bem abaixo do que o modelo anuncia — histórico
+# longo faz o system prompt (com os guardrails) ser descartado silenciosamente.
+CHAT_STREAM_MAX_SEGUNDOS = env.int("CHAT_STREAM_MAX_SEGUNDOS", default=120)
+CHAT_HISTORICO_MAX_TURNOS = env.int("CHAT_HISTORICO_MAX_TURNOS", default=6)

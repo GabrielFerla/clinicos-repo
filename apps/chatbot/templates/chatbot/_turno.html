@@ -1,0 +1,20 @@
+{% comment %}
+  Um turno da conversa: o balão da pergunta e o destino da resposta.
+
+  Devolvido pelo POST de `chatbot:mensagem`. O `data-stream` carrega a URL do
+  SSE; o script da página abre o EventSource ao ver este bloco chegar.
+{% endcomment %}
+<div class="space-y-3" data-turno data-stream="{{ url_stream }}" data-pergunta="{{ pergunta }}">
+  <div class="flex justify-end">
+    <p class="max-w-[80%] rounded-2xl rounded-br-sm bg-sky-600 px-4 py-2 text-white whitespace-pre-wrap">{{ pergunta }}</p>
+  </div>
+
+  <div class="flex justify-start">
+    <div class="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2 shadow-sm ring-1 ring-gray-200">
+      {# O status some quando o primeiro token chega. #}
+      <p data-status class="text-sm italic text-gray-500">Pensando…</p>
+      <p data-resposta class="whitespace-pre-wrap text-gray-900"></p>
+      <p data-erro class="hidden text-sm text-red-600"></p>
+    </div>
+  </div>
+</div>

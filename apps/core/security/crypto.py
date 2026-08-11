@@ -78,7 +78,7 @@ class CPFCipher:
         self._aesgcm = AESGCM(bytes(key))
 
     @classmethod
-    def from_urlsafe(cls, key_urlsafe: str) -> "CPFCipher":
+    def from_urlsafe(cls, key_urlsafe: str) -> CPFCipher:
         """Constrói a partir de chave base64-urlsafe (formato comum em ``.env``).
 
         Aceita chave com ou sem padding ``=``. Levanta ``InvalidKeyError`` se

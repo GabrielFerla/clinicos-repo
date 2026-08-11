@@ -111,3 +111,6 @@ backup/
 
 # ============ WSL/Windows ADS ============
 *:Zone.Identifier
+
+# Worktrees criados por agentes (checkouts inteiros do repo — nunca versionar)
+.claude/worktrees/

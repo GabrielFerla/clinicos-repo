@@ -1,9 +1,19 @@
+# Portas publicadas no host são parametrizáveis para a stack conviver com
+# outros projetos na mesma máquina. Os defaults de Redis (6380) e Mailhog
+# (1026/8026) já saem deslocados de propósito, porque são as imagens mais
+# comuns de já estarem rodando. Para mudar, defina no `.env`:
+#
+#     ORACLE_PORT=1522
+#     DJANGO_PORT=8001
+#
+# Isso é só o mapeamento host→container; a comunicação entre serviços continua
+# pelos nomes (`oracle:1521`, `redis:6379`) e não muda.
 services:
   oracle:
     image: gvenzl/oracle-free:23-slim
     container_name: clinicos-oracle
     ports:
-      - "1521:1521"
+      - "${ORACLE_PORT:-1521}:1521"
     environment:
       ORACLE_PASSWORD: oracle
       APP_USER: clinicos
@@ -22,7 +32,7 @@ services:
     image: redis:7-alpine
     container_name: clinicos-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6380}:6379"
     volumes:
       - redis-data:/data
     command: ["redis-server", "--appendonly", "yes"]
@@ -31,8 +41,8 @@ services:
     image: mailhog/mailhog
     container_name: clinicos-mailhog
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "${MAILHOG_SMTP_PORT:-1026}:1025"
+      - "${MAILHOG_UI_PORT:-8026}:8025"
 
   django:
     build:
@@ -43,7 +53,16 @@ services:
     volumes:
       - ./:/app
     ports:
-      - "8000:8000"
+      - "${DJANGO_PORT:-8000}:8000"
+    # O LLM e os embeddings rodam no Ollama do HOST, não num container.
+    # `host.docker.internal` é o caminho suportado no Docker Desktop/WSL2 —
+    # `network_mode: host` quebra o port forwarding para o browser (o "host"
+    # do container é a VM do Docker Desktop, não a distro WSL2).
+    #
+    # Pré-requisito no host: o Ollama precisa escutar em 0.0.0.0, não só em
+    # 127.0.0.1 (o default). Ver docs/SETUP.md, seção Ollama.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       oracle:
         condition: service_healthy
@@ -53,7 +72,7 @@ services:
         condition: service_started
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
-      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1
+      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/FREEPDB1
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       EMAIL_HOST: mailhog
@@ -61,6 +80,10 @@ services:
       EMAIL_USE_TLS: "False"
       DJANGO_DEBUG: "True"
       DJANGO_SECRET_KEY: dev-insecure-change-me
+      LLM_BASE_URL: http://host.docker.internal:11434/v1
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
+      EMBEDDING_BASE_URL: http://host.docker.internal:11434
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-paraphrase-multilingual}
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
 
@@ -72,6 +95,8 @@ services:
     command: celery -A config worker -l info
     volumes:
       - ./:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       django:
         condition: service_started
@@ -79,7 +104,7 @@ services:
         condition: service_started
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
-      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1
+      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/FREEPDB1
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       EMAIL_HOST: mailhog
