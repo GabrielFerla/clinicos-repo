@@ -40,6 +40,7 @@ clinicos/
 │   ├── PLANO.md              ← documento mestre do projeto (vivo)
 │   ├── ESCOPO.md             ← escopo do MVP1 + lista de fora-de-escopo
 │   ├── ARQUITETURA.md        ← detalhes técnicos, modelo de dados, decisões
+│   ├── CHAT_MVP.md           ← guia de implementação do chatbot (fatia vertical)
 │   ├── METRICAS.md           ← métricas de sucesso e como medi-las
 │   ├── RISCOS.md             ← registro vivo de riscos do projeto
 │   └── adr/                  ← Architecture Decision Records
