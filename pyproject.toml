@@ -38,13 +38,16 @@ extend-exclude = '''
     \.git
   | \.venv
   | migrations
+  | \.claude
 )/
 '''
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["migrations", ".venv"]
+# ``.claude/worktrees/`` guarda checkouts inteiros do repo criados por agentes.
+# Sem excluí-lo, ``make fmt`` reformata centenas de arquivos de outras branches.
+extend-exclude = ["migrations", ".venv", ".claude"]
 
 [tool.ruff.lint]
 select = [
@@ -73,3 +76,16 @@ known-first-party = ["apps", "config"]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 addopts = "-ra --strict-markers"
+
+# Markers precisam ser registrados aqui por causa do ``--strict-markers``:
+# sem esta seção, usar ``@pytest.mark.oracle`` não vira skip — vira **erro de
+# coleta**, e a suíte inteira deixa de rodar.
+#
+# Note que NÃO há ``-m`` no ``addopts``. Quem filtra é o CI (via ``ci.yml``) e
+# os alvos do Makefile. Embutir o filtro aqui faria os testes de Oracle nunca
+# rodarem por acidente, que é o pior dos mundos. O auto-skip fica no
+# ``conftest.py`` da raiz, controlado por variável de ambiente.
+markers = [
+    "oracle: exige Oracle 23ai real (coluna VECTOR, PL/SQL, constraints). Habilite com CLINICOS_TEST_ORACLE=1.",
+    "llm: exige Ollama no host (chat ou embeddings). Habilite com CLINICOS_TEST_LLM=1.",
+]
