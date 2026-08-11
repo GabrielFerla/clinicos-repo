@@ -5,7 +5,11 @@
 Django>=5.1,<5.2
 django-environ>=0.11,<1.0
 django-tailwind[reload]>=3.8
-oracledb>=2.4
+# Teto obrigatório: o backend Oracle do Django 5.1 assume `oracledb.Binary`
+# como *tipo* (usa em `isinstance`). Da série 3.x em diante ele virou função, e
+# QUALQUER query estoura com `TypeError: isinstance() arg 2 must be a type`.
+# Só suba este teto junto com a versão do Django, testando contra o Oracle.
+oracledb>=2.5,<3.0
 redis>=5.0
 celery>=5.4,<6.0
 gunicorn>=22.0

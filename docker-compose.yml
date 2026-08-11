@@ -62,7 +62,7 @@ services:
         condition: service_started
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
-      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1
+      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/FREEPDB1
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       EMAIL_HOST: mailhog
@@ -94,7 +94,7 @@ services:
         condition: service_started
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
-      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1
+      DATABASE_URL: oracle://clinicos:oracle@oracle:1521/FREEPDB1
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       EMAIL_HOST: mailhog

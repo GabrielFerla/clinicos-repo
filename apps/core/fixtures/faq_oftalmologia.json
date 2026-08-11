@@ -1,0 +1,102 @@
+[
+  {
+    "categoria": "Convênios",
+    "pergunta": "Vocês aceitam convênio?",
+    "resposta": "Sim. Atendemos Unimed, Bradesco Saúde, SulAmérica, Amil e Hapvida. Traga a carteirinha e um documento com foto na recepção. A cobertura de exames varia conforme o plano — confirme com a recepção antes da consulta."
+  },
+  {
+    "categoria": "Convênios",
+    "pergunta": "Meu convênio cobre cirurgia de catarata?",
+    "resposta": "A maioria dos planos cobre a cirurgia de catarata, mas a lente intraocular pode ter cobertura parcial. A recepção faz a checagem junto ao convênio e informa antes do procedimento se haverá diferença a pagar."
+  },
+  {
+    "categoria": "Preços",
+    "pergunta": "Quanto custa uma consulta particular?",
+    "resposta": "A consulta oftalmológica particular custa R$ 350,00 e inclui a avaliação completa com exame de refração. Aceitamos PIX, dinheiro e cartão de crédito em até 3x sem juros."
+  },
+  {
+    "categoria": "Preços",
+    "pergunta": "Qual o valor dos exames de imagem?",
+    "resposta": "Retinografia custa R$ 180,00, OCT de mácula R$ 320,00 e campimetria computadorizada R$ 240,00. Pacientes de convênio geralmente têm cobertura mediante autorização prévia."
+  },
+  {
+    "categoria": "Agendamento",
+    "pergunta": "Como faço para agendar uma consulta?",
+    "resposta": "Você pode agendar por aqui mesmo, informando a especialidade e o período de preferência. Também atendemos pelo telefone (51) 3000-0000 e pelo WhatsApp (51) 99999-0000."
+  },
+  {
+    "categoria": "Agendamento",
+    "pergunta": "Como cancelo ou remarco minha consulta?",
+    "resposta": "Cancelamentos e remarcações são gratuitos até 24 horas antes do horário, pelo telefone ou WhatsApp. Cancelamentos no mesmo dia podem ser cobrados conforme o contrato do plano."
+  },
+  {
+    "categoria": "Atendimento",
+    "pergunta": "Qual o horário de funcionamento da clínica?",
+    "resposta": "Atendemos de segunda a sexta, das 08h às 19h, e aos sábados das 08h às 13h. Não abrimos aos domingos e feriados."
+  },
+  {
+    "categoria": "Atendimento",
+    "pergunta": "Onde fica a clínica e tem estacionamento?",
+    "resposta": "Ficamos na Rua Exemplo, 123, Centro, Porto Alegre/RS, a duas quadras da estação Mercado do Trensurb. Temos estacionamento conveniado no prédio com 2 horas gratuitas — valide o ticket na recepção."
+  },
+  {
+    "categoria": "Atendimento",
+    "pergunta": "Vocês atendem pelo SUS?",
+    "resposta": "Não atendemos pelo SUS. Trabalhamos com convênios credenciados e consultas particulares."
+  },
+  {
+    "categoria": "Atendimento",
+    "pergunta": "Vocês atendem crianças?",
+    "resposta": "Sim. Temos oftalmologia pediátrica para crianças a partir de 6 meses. A primeira consulta costuma incluir avaliação de estrabismo e de acuidade visual adequada à idade."
+  },
+  {
+    "categoria": "Preparo",
+    "pergunta": "Preciso levar alguém comigo na consulta?",
+    "resposta": "Recomendamos sim. Em boa parte das consultas usamos colírio para dilatar a pupila, o que deixa a visão embaçada por 4 a 6 horas e impede que você dirija na volta."
+  },
+  {
+    "categoria": "Preparo",
+    "pergunta": "Posso dirigir depois da consulta?",
+    "resposta": "Se houver dilatação da pupila, não. O efeito do colírio dura de 4 a 6 horas e prejudica o foco e a sensibilidade à luz. Venha acompanhado ou planeje voltar de transporte por aplicativo."
+  },
+  {
+    "categoria": "Preparo",
+    "pergunta": "Preciso tirar a lente de contato antes da consulta?",
+    "resposta": "Sim. Retire as lentes gelatinosas 24 horas antes e as rígidas 72 horas antes. A lente altera a curvatura da córnea e pode distorcer a medida do grau."
+  },
+  {
+    "categoria": "Preparo",
+    "pergunta": "O que devo levar na primeira consulta?",
+    "resposta": "Traga documento com foto, carteirinha do convênio, os óculos ou lentes que usa hoje, a receita anterior se tiver, e a lista de medicamentos de uso contínuo."
+  },
+  {
+    "categoria": "Exames",
+    "pergunta": "Preciso de pedido médico para fazer exames?",
+    "resposta": "Para exames feitos aqui na clínica, o próprio oftalmologista solicita durante a consulta. Se o pedido veio de outro médico, traga o encaminhamento — o convênio costuma exigir para autorizar."
+  },
+  {
+    "categoria": "Exames",
+    "pergunta": "Quanto tempo demora para sair o resultado dos exames?",
+    "resposta": "Exames de imagem como retinografia e OCT são avaliados na hora, ainda durante a consulta. Laudos escritos ficam prontos em até 3 dias úteis e podem ser retirados na recepção."
+  },
+  {
+    "categoria": "Especialidades",
+    "pergunta": "Quais especialidades oftalmológicas vocês atendem?",
+    "resposta": "Temos oftalmologia geral, retina, glaucoma, córnea e oftalmologia pediátrica. Se não souber qual procurar, a consulta de oftalmologia geral faz a triagem e encaminha."
+  },
+  {
+    "categoria": "Especialidades",
+    "pergunta": "Vocês fazem cirurgia refrativa para parar de usar óculos?",
+    "resposta": "Fazemos a avaliação pré-operatória de cirurgia refrativa, que define se você é candidato. A cirurgia é realizada em centro cirúrgico parceiro. A avaliação exige topografia de córnea e suspensão prévia das lentes de contato."
+  },
+  {
+    "categoria": "Sintomas",
+    "pergunta": "Estou com o olho vermelho, devo me preocupar?",
+    "resposta": "Olho vermelho tem muitas causas, da conjuntivite a quadros mais sérios. Se vier acompanhado de dor forte, perda de visão ou sensibilidade intensa à luz, procure atendimento no mesmo dia. Só o exame presencial permite o diagnóstico."
+  },
+  {
+    "categoria": "Sintomas",
+    "pergunta": "Estou vendo pontinhos pretos flutuando, o que pode ser?",
+    "resposta": "São as chamadas moscas volantes, comuns e em geral benignas. Mas se apareceram de repente, em grande quantidade, ou junto com flashes de luz e sombra na visão lateral, procure a clínica com urgência — pode indicar descolamento de retina."
+  }
+]

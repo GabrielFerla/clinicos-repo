@@ -153,16 +153,51 @@ TEMPLATES = [
 # Banco de dados (Oracle 23ai)
 # ---------------------------------------------------------------------------
 # ``env.db_url`` faz o parsing de ``DATABASE_URL`` no formato
-# ``oracle://user:password@host:port/?service_name=PDB`` e devolve o dict no
-# formato esperado pelo Django. O default aponta para o serviço ``oracle`` do
-# compose, evitando explosão silenciosa em ``manage.py check`` — qualquer
-# operação real ainda precisa do Oracle no ar.
+# ``oracle://user:password@host:port/SERVICE_NAME``. O default aponta para o
+# serviço ``oracle`` do compose, evitando explosão silenciosa em
+# ``manage.py check`` — qualquer operação real ainda precisa do Oracle no ar.
 DATABASES = {
     "default": env.db_url(
         "DATABASE_URL",
-        default="oracle://clinicos:oracle@oracle:1521/?service_name=FREEPDB1",
+        default="oracle://clinicos:oracle@oracle:1521/FREEPDB1",
     ),
 }
+
+
+def _normalizar_dsn_oracle(cfg: dict) -> None:
+    """Converte HOST/PORT/NAME para uma string EZConnect no ``NAME``.
+
+    O backend Oracle do Django monta o DSN assim (``django/db/backends/oracle/
+    base.py``)::
+
+        if settings_dict["PORT"]:
+            return makedsn(host, int(port), settings_dict["NAME"])
+        return settings_dict["NAME"]
+
+    O terceiro argumento de ``makedsn`` é o **SID**, não o service name. Como o
+    Oracle 23ai Free expõe o PDB por *service name* (``FREEPDB1``), deixar
+    ``PORT`` preenchido produz ``DPY-6003: SID "FREEPDB1" is not registered``.
+
+    Esvaziando ``PORT`` e passando ``host:port/service`` em ``NAME``, o Django
+    devolve a string intacta e o ``python-oracledb`` a interpreta como
+    EZConnect — onde o que vem depois da barra é o service name. É o caminho
+    suportado para PDB.
+
+    Nota: não adianta pôr ``service_name`` em ``OPTIONS``. Aquele dict é
+    repassado como ``**kwargs`` para ``oracledb.connect()`` junto com o ``dsn``,
+    o que é ambíguo. É também por isso que a URL usa ``/FREEPDB1`` no path e não
+    ``?service_name=FREEPDB1``: para Oracle com path vazio, o django-environ
+    move o hostname para ``NAME`` e **zera o HOST**, e a conexão vai parar em
+    localhost.
+    """
+    if "oracle" not in cfg.get("ENGINE", "") or not cfg.get("PORT"):
+        return
+    host = (cfg.get("HOST") or "localhost").strip()
+    cfg["NAME"] = f"{host}:{cfg['PORT']}/{cfg['NAME']}"
+    cfg["PORT"] = ""
+
+
+_normalizar_dsn_oracle(DATABASES["default"])
 
 
 # ---------------------------------------------------------------------------
