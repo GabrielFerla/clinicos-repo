@@ -16,8 +16,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "black>=24.10",
-    "ruff>=0.7",
+    # Teto de versão em black/ruff é intencional — ver comentário em
+    # infra/django/requirements/dev.txt.
+    "black>=26.0,<27.0",
+    "ruff>=0.16,<0.17",
     "pytest>=8.3",
     "pytest-django>=4.9",
     "pytest-cov>=5.0",

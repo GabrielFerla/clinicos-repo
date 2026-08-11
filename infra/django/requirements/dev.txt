@@ -1,11 +1,16 @@
 -r base.txt
 
-# Toolchain de desenvolvimento. Versões enxutas; ajuste em S1-24/S1-25
-# quando o CI estiver montado.
+# Toolchain de desenvolvimento.
+#
+# Formatadores e linters têm **teto de versão** de propósito: eles decidem se
+# o CI passa ou falha, e mudam de estilo entre minors. Com `ruff>=0.6` solto,
+# o CI instalava a versão do dia — a suíte foi escrita contra a 0.7 e passou a
+# reprovar sozinha na 0.16, sem ninguém tocar no código. Suba o teto de forma
+# deliberada, num commit só de formatação.
 pytest>=8.0
 pytest-django>=4.8
 pytest-cov>=5.0
-ruff>=0.6
-black>=24.0
+ruff>=0.16,<0.17
+black>=26.0,<27.0
 ipython>=8.0
 django-debug-toolbar>=4.4
