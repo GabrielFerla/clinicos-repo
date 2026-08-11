@@ -6,6 +6,47 @@ Onboarding em 1 comando. Substitui as várias páginas de README "passo a passo"
 
 - **Docker** (Desktop em macOS/Windows, Engine em Linux/WSL2)
 - **Docker Compose v2** (plugin do Docker; `docker compose version` deve responder)
+- **Ollama no host**, para o chatbot (ver seção abaixo)
+
+## Ollama — o LLM do chatbot
+
+O chat roda com modelo local, sem chave de API e sem custo por token:
+
+```bash
+ollama pull qwen2.5:3b && ollama pull paraphrase-multilingual
+```
+
+Três coisas que economizam horas de depuração:
+
+1. **Use um modelo sem "thinking".** Os da família qwen3 raciocinam antes de
+   responder e isso **não desliga pela API** — nem por `think:false`, nem por
+   `chat_template_kwargs`, nem por `/no_think`. O resultado é de 8 a 45 segundos
+   de tela em branco, ou o raciocínio em inglês vazando como resposta.
+2. **O modelo de embedding precisa ser multilíngue.** `all-minilm` é treinado em
+   inglês e casa por sobreposição lexical em português — "que horas vocês
+   abrem?" recuperava "Vocês atendem pelo SUS?".
+3. **De dentro do container, o host é `host.docker.internal`** — o compose já
+   injeta o `extra_hosts`. No Docker Desktop com WSL2 isso funciona mesmo com o
+   Ollama escutando só em `127.0.0.1`. Confira com:
+   ```bash
+   docker compose run --rm django python -c "import urllib.request;print(urllib.request.urlopen('http://host.docker.internal:11434/api/tags',timeout=5).status)"
+   ```
+
+Medições e justificativas em [`CHAT_MVP.md`](CHAT_MVP.md).
+
+Depois de `make migrate` e `make seed`, gere os embeddings — sem isso a busca
+semântica não devolve nada:
+
+```bash
+docker compose run --rm django python manage.py reindexar_faq
+```
+
+## Portas
+
+As portas publicadas no host são parametrizáveis, para a stack conviver com
+outros projetos na mesma máquina. Redis e Mailhog já saem deslocados (6380 e
+1026/8026). Para mudar, defina no `.env`: `ORACLE_PORT`, `DJANGO_PORT`,
+`REDIS_PORT`, `MAILHOG_SMTP_PORT`, `MAILHOG_UI_PORT`.
 - **`make`**
 - ~6 GB de RAM livres para o container Oracle
 - ~5 GB de disco para imagens + volume do Oracle

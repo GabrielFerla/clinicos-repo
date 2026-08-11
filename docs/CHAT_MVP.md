@@ -1,8 +1,25 @@
 # Chat MVP — guia de implementação
 
-> Documento vivo, escrito para quem vai implementar. Descreve a **fatia vertical mínima do chatbot**: o que construir, em que ordem, e as armadilhas medidas neste ambiente. Para o estado geral do código, ver [`STATUS.md`](STATUS.md); para a arquitetura completa, [`ARQUITETURA.md`](ARQUITETURA.md); para as tarefas, [`../sprints/`](../sprints/).
+> Documento vivo. Descreve a **fatia vertical mínima do chatbot** — o que foi construído, em que ordem, e as armadilhas medidas neste ambiente. Para o estado geral do código, ver [`STATUS.md`](STATUS.md); para a arquitetura completa, [`ARQUITETURA.md`](ARQUITETURA.md); para as tarefas, [`../sprints/`](../sprints/).
 >
 > **Escopo desta entrega:** chat com RAG e tools de **leitura**. Não agenda consulta.
+>
+> **Status: implementado e validado** em 11/08/2026. Os três caminhos da §1 funcionam ponta a ponta contra Oracle 23ai e Ollama local. 292 testes em CI, 16 contra Oracle real, 5 contra o Ollama.
+
+---
+
+## 0. Se você só vai ler uma seção
+
+Quatro descobertas mudaram o desenho durante a implementação. Todas foram medidas, não deduzidas — e todas contrariam o que parecia óbvio no papel:
+
+| Descoberta | Impacto |
+|---|---|
+| **Prompt longo destrói tool use.** System prompt de 2.935 chars → ferramenta chamada em **0/5** perguntas; de 230 chars → **4/6**. Pior: com o prompt longo o modelo respondia de memória, inventando que a clínica não tem estacionamento. | O prompt foi cortado para ~380 chars e há teste travando o tamanho. Guardrails clínicos saíram para código determinístico ([`guardrails.py`](../apps/chatbot/guardrails.py)). |
+| **`tool_choice="auto"` é instável em modelo pequeno**, e o histórico piora (3/4 sem histórico → 2/4 com um turno). | A chamada de decisão usa `required`. Grounding deixa de depender do humor do modelo. |
+| **Modelo de embedding em inglês não serve para português.** `all-minilm` casava por sobreposição lexical: "que horas vocês abrem?" trazia "Vocês atendem pelo SUS?". Baseline de 8 paráfrases: **6/8** contra **8/8** do multilíngue. | Migrou para `paraphrase-multilingual`, 768 dimensões (ADR-0004 → Decided). |
+| **Indexar só a pergunta perde relevância.** Perguntas de FAQ são curtas e compartilham palavras funcionais, então o vetor fica dominado por elas. Pergunta+resposta: **7/7** contra 6/7. | `reindexar_faq` vetoriza os dois campos. |
+
+A lição transversal: **num modelo de 3B, quem faz o roteamento é a `description` de cada ferramenta, não o system prompt.** Regra específica pertence à tool; o prompt diz o mínimo.
 
 ---
 
@@ -322,11 +339,36 @@ docker compose exec django pytest -m "not oracle and not llm" -q
 docker compose exec django pytest -m oracle -q
 ```
 
-**Teste manual — é o que define "funcional".** Abrir `http://localhost:8000/chat/` e validar os três caminhos da §1. Em todos: **a tela nunca fica parada mais de ~1s sem feedback**.
+**Teste manual — é o que define "funcional".** Abrir `http://localhost:8000/chat/` e validar os três caminhos da §1.
 
-**Teste de grounding (R4):** perguntar por especialidade inexistente ("cardiologista") → precisa dizer que não atende, **sem inventar médico ou horário**. É o sinal de alerta que [`RISCOS.md`](RISCOS.md) define para esse risco.
+Resultado medido em 11/08/2026, com os modelos quentes:
+
+| Pergunta | Ferramenta | TTFT | Resposta |
+|---|---|---:|---|
+| "Quais especialidades vocês atendem?" | `listar_especialidades_disponiveis` | 1,32s | as 5 do banco |
+| "Tem horário com retina de manhã?" | `buscar_slots` | 0,77s | médicos e horários reais, filtro de período respeitado |
+| "A clínica atende convênio?" | `buscar_faq` (Vector Search) | 0,91s | convênios reais da FAQ |
+| "Vocês atendem cardiologia?" | — | 0,88s | recusa correta, sem inventar |
+| "Me dá uma receita de colírio" | guardrail | **0,04s** | recusa + encaminhamento |
+| "Perdi a visão do olho direito" | guardrail | **0,04s** | orientação de urgência |
+
+Em 28 turnos registrados em `INTERACAO_CHAT`: **zero alucinações detectadas** pelo validador pós-geração.
+
+**Teste de grounding (R4):** perguntar por especialidade inexistente ("cardiologista") → precisa dizer que não atende, **sem inventar médico ou horário**. É o sinal de alerta que [`RISCOS.md`](RISCOS.md) define para esse risco. ✅
 
 **Instrumentar `ttf_content`** (tempo até o primeiro token visível) desde o primeiro dia — é a métrica que importa e a que engana se medida errado.
+
+### Bugs pré-existentes encontrados no caminho
+
+Nenhum tinha a ver com o chat; todos bloqueariam a Sprint 1 de qualquer forma.
+
+1. **`DATABASE_URL` no formato errado.** Com `?service_name=`, o django-environ move o hostname para `NAME` e zera o `HOST` — a conexão ia para localhost.
+2. **Service name tratado como SID.** O backend do Django monta `makedsn(host, port, NAME)`, e o 3º argumento é SID. Corrigido com EZConnect em `NAME`.
+3. **`oracledb` sem teto de versão** instalava a 4.x, incompatível com o Django 5.1 (`oracledb.Binary` virou função e o backend usa `isinstance`). Qualquer query estourava `TypeError`.
+4. **`AUTH_USER_MODEL` inexistente quebrava o `pytest`**, não só o `migrate` — o `django.contrib.admin` resolve o user model no `ready()`.
+5. **`components/_layout.html` nunca funcionou**: tinha `{% comment %}` antes do `{% extends %}`. Invisível desde a S1-17 porque nenhuma página o usava.
+6. **`make test` rodava contra o Oracle**, não SQLite: o `environment:` do compose vence o `DJANGO_SETTINGS_MODULE` do pyproject.
+7. **ruff/black sem teto de versão** faziam o CI reprovar sozinho conforme as ferramentas evoluíam.
 
 ---
 

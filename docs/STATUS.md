@@ -2,35 +2,43 @@
 
 > Documento vivo, escrito para o time técnico. Snapshot do que **existe de fato no código** — não do que está planejado. Regenerar ao fim de cada sprint. Para o plano, ver [`PLANO.md`](PLANO.md); para o escopo, [`ESCOPO.md`](ESCOPO.md); para as tarefas, [`sprints/`](../sprints/).
 
-**Snapshot:** 08/08/2026 · `main` @ `587c14d` · última atividade de código: **24/05/2026**
+**Snapshot:** 11/08/2026 · branch `feature/s5-chat-mvp` · última atividade de código: **11/08/2026**
+
+> Revisão de 11/08: a fatia vertical do chatbot foi implementada. As seções abaixo marcadas com 🔄 foram atualizadas; o restante ainda reflete o snapshot de 08/08.
 
 ---
 
-## 1. TL;DR
+## 1. TL;DR 🔄
 
-- **22% do MVP1 concluído** — 40 de 182 tarefas.
-- **Sprint 0 (validação técnica) fechada** em 26/27: a stack foi provada ponta a ponta num repo separado (`clinicos-spike`). Falta só apresentar os resultados (S0-27).
-- **Sprint 1 (fundação) em 54%** — 14/26. O que foi entregue é *andaime*: repo, Docker, settings, CI, Tailwind.
-- **O único código de domínio que existe são 222 linhas de criptografia de CPF** (`apps/core/security/`), com 87 testes. Todo o resto dos apps é esqueleto.
-- **O banco ainda não foi modelado.** Zero models, zero migrations. Isso é a S1-8, e ela trava 5 outras tarefas.
-- **`make setup` não completa hoje** e `make worker` quebra — ver [§5](#5-débitos-e-travas-conhecidas). São gaps esperados, mas até agora não documentados.
+- **~31% do MVP1 concluído** — 55 de 182 tarefas (eram 40).
+- **O chat funciona ponta a ponta.** Paciente pergunta em `/chat/`, o bot consulta Oracle 23ai (incluindo AI Vector Search) e responde em streaming. 12 tarefas da Sprint 5 e 3 da Sprint 1 fechadas. Guia completo em [`CHAT_MVP.md`](CHAT_MVP.md).
+- **Sprint 1 (fundação) em 65%** — 17/26. O banco **está modelado** para o subset do chat: 6 models, 6 migrations, aplicadas no Oracle real com rollback testado.
+- **Sprint 0** segue 26/27 (falta só apresentar, S0-27).
+- **`make setup`, `make test`, `make worker` e `make app` funcionam.** Os débitos #1, #2 e #3 estão resolvidos.
+- **Sete bugs pré-existentes** foram encontrados e corrigidos no caminho — nenhum tinha a ver com o chat, e três deles (formato da `DATABASE_URL`, service name tratado como SID, `oracledb` sem teto de versão) impediam qualquer conexão com o Oracle. Lista em [`CHAT_MVP.md` §6](CHAT_MVP.md).
+- **Ainda falta da S1-8:** Paciente, Consulta, Lead, Prontuario, Evolucao, LogAcesso e AgendaRegra. E o chat **não agenda** — as ferramentas são só de leitura.
 
 ---
 
-## 2. Placar de sprints
+## 2. Placar de sprints 🔄
 
 Contagem por ID de tarefa (`SX-Y`), direto dos checkboxes de `sprints/*.md`.
 
 | Sprint | Tarefas | Feitas | Abertas | % |
 |---|---:|---:|---:|---:|
 | S0 — Validação técnica | 27 | 26 | 1 | 🟢 96% |
-| S1 — Fundação | 26 | 14 | 12 | 🟡 54% |
+| S1 — Fundação | 26 | 17 | 9 | 🟡 65% |
 | S2 — CRM interno | 20 | 0 | 20 | ⚪ 0% |
 | S3 — Agenda | 17 | 0 | 17 | ⚪ 0% |
 | S4 — Site público | 23 | 0 | 23 | ⚪ 0% |
-| S5 — Chatbot | 33 | 0 | 33 | ⚪ 0% |
+| S5 — Chatbot | 33 | 12 | 21 | 🟡 36% |
 | S6 — Prontuário + hardening | 36 | 0 | 36 | ⚪ 0% |
-| **Total** | **182** | **40** | **142** | **22%** |
+| **Total** | **182** | **55** | **127** | **30%** |
+
+**S1-8 conta como aberta**: entregou o subset do chat (Usuario, Especialidade,
+Medico, MedicoEspecialidade, AgendaSlot, FaqVector, InteracaoChat), mas faltam
+Paciente, Consulta, Lead, Prontuario, Evolucao, LogAcesso e AgendaRegra. Mesma
+lógica em S1-16, cujo seeder ainda não cria pacientes.
 
 **Definition of Done: 0 de 52 itens marcados** — em nenhuma sprint, nem na S0 que está 96%. Ou seja: nenhuma sprint foi formalmente encerrada, só suas tarefas.
 
@@ -61,16 +69,17 @@ Contagem por ID de tarefa (`SX-Y`), direto dos checkboxes de `sprints/*.md`.
 
 ---
 
-## 4. O que ainda não existe
+## 4. O que ainda não existe 🔄
 
 | Área | Estado |
 |---|---|
-| **Modelos de dados** | Os 6 `models.py` têm 3 linhas cada (só o `import`). **Zero migrations** — todas as pastas `migrations/` contêm apenas `__init__.py`. |
-| **Rotas** | `config/urls.py` tem `urlpatterns = []`. Nenhuma URL registrada, nem `/admin/`. |
-| **Views / telas** | Nenhuma. Os `views.py` dos apps estão vazios. |
-| **Banco físico** | Sem seeders, sem trigger PL/SQL de imutabilidade em `EVOLUCAO`, sem constraint UNIQUE de slot, sem índice HNSW em `FAQ_VECTOR`. |
-| **Celery** | Não plugado — ver débito #2. |
-| **Testes de aplicação** | Os 6 `tests.py` dos apps são stubs de 3 linhas, **0 testes**. Os 87 testes existentes cobrem só os helpers de cripto, que são funções puras sem ORM. |
+| **Modelos de dados** | Parcial: 7 models e 6 migrations, aplicadas no Oracle. Faltam Paciente, Consulta, Lead, Prontuario, Evolucao, LogAcesso, AgendaRegra. |
+| **Rotas** | `/admin/` e `/chat/` existem. O site público (S4) não. |
+| **Views / telas** | Só o chat. CRM usa o Django Admin (ADR-0005); não há tela custom de agenda nem prontuário. |
+| **Banco físico** | Índice HNSW em `FAQ_VECTOR` ✅ e UNIQUE de slot ✅. Falta o trigger PL/SQL de imutabilidade em `EVOLUCAO` (S1-10), que depende do model `Evolucao`. |
+| **Celery** | Plugado, mas **sem nenhuma task**. O chat é síncrono. |
+| **Agendamento pelo chat** | As ferramentas são só de leitura. Criar Lead e Consulta é a S5-12, fora do escopo desta entrega. |
+| **Testes de aplicação** | 292 testes em CI + 16 contra Oracle + 5 contra o Ollama. Cobrem cripto, models, tools, SSE, guardrails e o loop de tool use. Não há teste E2E de browser. |
 
 ---
 
@@ -78,16 +87,18 @@ Contagem por ID de tarefa (`SX-Y`), direto dos checkboxes de `sprints/*.md`.
 
 Todos verificados nesta revisão, com evidência no código.
 
+🔄 Os débitos #1, #2, #3, #6 e #7 foram **resolvidos** em 11/08 (marcados ✅ abaixo).
+
 | # | Item | Evidência | Impacto |
 |---|---|---|---|
-| 1 | `AUTH_USER_MODEL = "core.Usuario"` aponta para um model que não existe | [`config/settings/base.py:225`](../config/settings/base.py) (com `TODO(S1-8)` explícito nas linhas 221-224) | `makemigrations`/`migrate` falham → **`make setup` não completa**, apesar do README prometer setup em 1 comando |
-| 2 | Celery não plugado: não existe `config/celery.py` e `config/__init__.py` está com **0 bytes** | `Makefile:9` e o serviço `celery-worker` do compose chamam `celery -A config worker` | `make worker` quebra e o container `celery-worker` não sobe |
-| 3 | Sem rota `/admin/` | [`config/urls.py:9`](../config/urls.py) | `setup.sh` anuncia `http://localhost:8000/admin/` e cria o superuser `admin/admin` — que hoje é inalcançável |
+| 1 | ✅ **Resolvido.** `AUTH_USER_MODEL` apontava para model inexistente | `apps/core/models.py` agora tem `Usuario(AbstractUser)` | Era pior do que registrado aqui: quebrava também o `pytest`, porque o `django.contrib.admin` resolve o user model no `ready()` |
+| 2 | ✅ **Resolvido.** Celery não plugado | `config/celery.py` + `config/__init__.py` | — |
+| 3 | ✅ **Resolvido.** Sem rota `/admin/` | `config/urls.py` com `/admin/` e `/chat/` | — |
 | 4 | CI não exige cobertura mínima | [`.github/workflows/ci.yml:101`](../.github/workflows/ci.yml) roda `--cov` sem `--cov-fail-under` | O "70% mínimo nos módulos de domínio" do `CLAUDE.md` é só texto; a cobertura é informativa |
 | 5 | bandit roda com `\|\| true` | [`.github/workflows/ci.yml:137`](../.github/workflows/ci.yml) | Achado de segurança não bloqueia merge. Já há um TODO no header do YAML para remover quando estabilizar |
-| 6 | Pin do Django divergente | `pyproject.toml:12` diz `<6.0`; `infra/django/requirements/base.txt:5` diz `<5.2` | Risco de drift entre o que o CI instala e o que o Docker instala. A fonte de verdade prática é `requirements/` |
-| 7 | Marker `@pytest.mark.oracle` é citado mas não registrado | `pyproject.toml:75` tem `--strict-markers` e **nenhuma seção `markers`**; `ci.yml:12` já se refere ao marker | Usar o marker hoje **quebra a suíte**. Registrar antes da S1-9 |
-| 8 | Spike do Claude foi validado contra Ollama `qwen3:8b`, não contra a Anthropic API | `clinicos-spike/checkpoint-4` (repo separado) | Tool Use e streaming precisam ser **revalidados com a API real antes da S5** |
+| 6 | ✅ **Resolvido (parcial).** Dependências sem teto de versão | `ruff`, `black` e `oracledb` agora têm teto | O `oracledb` sem teto instalava a 4.x, incompatível com o Django 5.1 — **qualquer query estourava `TypeError`**. ruff/black sem teto faziam o CI reprovar sozinho conforme evoluíam |
+| 7 | ✅ **Resolvido.** Marker `oracle` não registrado | `pyproject.toml` com seção `markers` + `conftest.py` na raiz com auto-skip | Com `--strict-markers`, usar o marker era **erro de coleta**: zero testes rodavam |
+| 8 | **Aberto.** LLM local (Ollama `qwen2.5:3b`), não Anthropic | ADR-0006 pendente; interface `LLMClient` isola o provedor | O compromisso com a Anthropic segue de pé. Trocar é escrever outra implementação do Protocol, não mexer no `ChatService` |
 | 9 | `.claude/worktrees/` untracked + 13 branches `worktree-agent-*` locais | `.gitignore:110` ignora só `.claude/settings.local.json` | Ruído no `git status` e na lista de branches |
 | 10 | `main` local está 1 commit atrás do remoto | Remoto em `587c14d` (PR #6 mergeado); local em `63f1fa4` | Resolver com `git pull`. O conteúdo é idêntico ao de `feature/s1-block-c` |
 
@@ -151,22 +162,30 @@ Na linha do tempo original, agosto cairia na **Sprint 5 (semanas 10-11)**. O pro
 
 Detalhes e troubleshooting em [`SETUP.md`](SETUP.md). Não é preciso ter Python no host — só Docker + Compose v2.
 
+🔄 **Pré-requisitos do chat** (uma vez):
+
+```bash
+ollama pull qwen2.5:3b && ollama pull paraphrase-multilingual
+```
+
 **Funciona:**
 
 ```bash
-make up      # Oracle 23ai + Redis + Mailhog
-make test    # pytest — 87 testes de cripto, SQLite em memória
-make lint    # ruff + black --check
-make fmt     # ruff --fix + black
+bash infra/scripts/bootstrap.sh   # stack + restart que ativa vector_memory_size
+make migrate                      # aplica no Oracle 23ai
+make seed                         # especialidades, médicos, slots e FAQs
+make test                         # 292 testes, SQLite em memória
+make test-oracle                  # 16 testes contra Oracle real (VECTOR/HNSW)
+make test-llm                     # 5 testes contra o Ollama
+make lint / make fmt
+make app                          # http://localhost:8000/chat/ e /admin/
 ```
 
-**Ainda não funciona** (esperado até a S1-8/S1-9):
+Depois do `make seed`, rode `docker compose run --rm django python manage.py reindexar_faq`
+para gerar os embeddings — sem isso a busca semântica não devolve nada.
 
-| Comando | Por quê |
-|---|---|
-| `make setup` | Sobe os serviços, mas falha no `migrate` — débito #1 |
-| `make worker` | Não há app Celery em `config` — débito #2 |
-| `make app` | Sobe o runserver, mas `urlpatterns` está vazio: nenhuma rota, nem `/admin/` — débito #3 |
+**Atenção a portas:** os defaults de Redis e Mailhog saem deslocados (6380, 1026/8026)
+para conviver com outras stacks na mesma máquina. Ajuste no `.env` se precisar.
 
 ---
 
