@@ -97,8 +97,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r infra/django/requirements/dev.txt
 
+      # Os markers `oracle` e `llm` já são auto-pulados pelo conftest.py da
+      # raiz (só rodam com CLINICOS_TEST_ORACLE=1 / CLINICOS_TEST_LLM=1, que o
+      # CI não define). O `-m` explícito aqui é cinto e suspensório: deixa
+      # visível no log do CI o que está fora e evita que uma mudança futura no
+      # conftest ligue esses testes sem querer, num runner sem Oracle nem GPU.
       - name: Run pytest with coverage
-        run: pytest -q --tb=short --cov=apps --cov-report=term --cov-report=xml
+        run: pytest -q --tb=short -m "not oracle and not llm" --cov=apps --cov-report=term --cov-report=xml
 
       - name: Upload coverage report (artifact)
         if: always()
