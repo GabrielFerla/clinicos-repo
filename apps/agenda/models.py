@@ -1,9 +1,13 @@
-"""Models da agenda — regras de disponibilidade e slots de atendimento.
+"""Models da agenda — regras de disponibilidade, slots e consultas.
 
 ``AgendaSlot`` é a janela concreta que a tool ``buscar_slots`` lê (Bloco 1A do
 ``docs/CHAT_MVP.md``). ``AgendaRegra`` é a regra recorrente semanal a partir da
 qual esses slots são *gerados* — só a modelagem entra aqui `[S1-8]`; a geração
-propriamente dita (command ``gerar_slots``) é `[S3-3]`.
+propriamente dita (command ``gerar_slots``) é `[S3-3]`. ``Consulta`` é a
+ocupação de um slot por um paciente; ela mora neste app, e não no ``crm``,
+porque a ``ARQUITETURA.md`` põe o ``AgendamentoService`` em
+``apps/agenda/services/agendamento.py`` — o model fica junto do service que o
+escreve `[S3-7]`.
 
 Valem as mesmas convenções de schema descritas na docstring de
 ``apps/crm/models.py``: ``db_table`` em UPPER_SNAKE_CASE, nome explícito em
@@ -249,3 +253,138 @@ class AgendaSlot(models.Model):
     def esta_livre(self) -> bool:
         """Atalho de leitura para templates e para as tools do chatbot."""
         return self.status == self.Status.LIVRE
+
+
+class Consulta(models.Model):
+    """Agendamento de um paciente em um slot de um médico.
+
+    **Segunda barreira anti-overbooking.** ``UK_SLOT_MEDICO_HORARIO`` garante
+    que não existam dois *slots* no mesmo ``(médico, data, hora)``; o
+    ``OneToOneField`` para :class:`AgendaSlot` garante que não existam duas
+    *consultas* no mesmo slot. São camadas distintas: a primeira protege a
+    geração da agenda, a segunda protege o agendamento. Sem ela, dois pedidos
+    concorrentes para o mesmo horário livre passariam pela constraint do slot
+    (que já existia e não é violada por um INSERT em ``CONSULTA``) e o paciente
+    descobriria a colisão só na recepção. A garantia mora no schema, não na
+    aplicação — a transação serializável de `[S3-7]` é otimização de
+    experiência, não a fonte da integridade.
+
+    O ``OneToOneField`` implica ``unique=True`` no campo, que é a única exceção
+    à regra "unicidade sempre via ``UniqueConstraint`` nomeada" (ver docstring
+    de ``apps/crm/models.py``): o Django não permite desligar o ``unique`` de um
+    ``OneToOneField``, e declarar uma ``UniqueConstraint`` adicional sobre a
+    mesma coluna estouraria ``ORA-01408``. O trade-off aceito é o nome
+    autogerado dessa única constraint.
+
+    Attributes:
+        slot: Janela ocupada. ``PROTECT`` porque apagar o slot apagaria a prova
+            de quando a consulta foi marcada; slot indisponível usa
+            ``AgendaSlot.Status.BLOQUEADO``.
+        medico: **Desnormalização deliberada** de ``slot.medico``. A tela
+            "minha agenda" `[S3-12]` e o filtro por médico no Admin são as
+            leituras mais frequentes do sistema, e sem esta coluna toda uma
+            delas exigiria join com ``AGENDA_SLOT`` só para chegar ao dono do
+            horário. O custo é a invariante ``consulta.medico == slot.medico``,
+            que o banco não impõe (exigiria trigger ou FK composta) e que o
+            ``AgendamentoService`` `[S3-7]` é responsável por preencher a partir
+            do próprio slot — nenhum caller deve informar o médico à mão.
+        observacoes: Anotação operacional curta da recepção ("paciente prefere
+            chegar mais cedo", "acompanhante"). ``CharField`` e **não**
+            ``TextField``: a busca do Admin varre esta coluna, e ``NCLOB`` não
+            entra em ``WHERE``/``ORDER BY`` no Oracle. Texto clínico não passa
+            por aqui — ele é append-only e mora em ``EVOLUCAO``.
+        origem: Por onde a consulta entrou. É o denominador da métrica de
+            conversão do chatbot `[S5-28]`.
+    """
+
+    class Status(models.TextChoices):
+        AGENDADA = "AGENDADA", "Agendada"
+        CONFIRMADA = "CONFIRMADA", "Confirmada"
+        REALIZADA = "REALIZADA", "Realizada"
+        CANCELADA = "CANCELADA", "Cancelada"
+        FALTOU = "FALTOU", "Faltou"
+
+    class Origem(models.TextChoices):
+        CHAT = "CHAT", "Chatbot"
+        RECEPCAO = "RECEPCAO", "Recepção"
+        SITE = "SITE", "Site"
+
+    paciente = models.ForeignKey(
+        "crm.Paciente",
+        # PROTECT: consulta é histórico clínico (retenção CFM de 20 anos).
+        # Arquivar paciente usa ``Paciente.ativo``.
+        on_delete=models.PROTECT,
+        related_name="consultas",
+        verbose_name="paciente",
+        # FK não coberta por outra constraint; sem índice o Oracle trava a
+        # tabela pai durante DML. O índice existe em Meta.indexes, nomeado.
+        db_index=False,
+    )
+    slot = models.OneToOneField(
+        AgendaSlot,
+        on_delete=models.PROTECT,
+        related_name="consulta",
+        verbose_name="slot",
+        # O UNIQUE do OneToOne já é respaldado por índice; um segundo
+        # CREATE INDEX sobre a mesma coluna daria ORA-01408 no Oracle.
+        db_index=False,
+    )
+    medico = models.ForeignKey(
+        "crm.Medico",
+        on_delete=models.PROTECT,
+        related_name="consultas",
+        verbose_name="médico",
+        db_index=False,  # coberto por IDX_CONSULTA_MEDICO (ver Meta.indexes)
+        help_text="Cópia de slot.medico — preenchida pelo AgendamentoService, não pelo caller.",
+    )
+    status = models.CharField(
+        "status",
+        max_length=10,
+        choices=Status.choices,
+        default=Status.AGENDADA,
+    )
+    origem = models.CharField(
+        "origem",
+        max_length=10,
+        choices=Origem.choices,
+        default=Origem.RECEPCAO,
+        help_text="RECEPCAO é o caminho manual; CHAT e SITE são preenchidos por quem agenda.",
+    )
+    observacoes = models.CharField(
+        "observações",
+        max_length=500,
+        blank=True,
+        help_text=(
+            "Anotação operacional da recepção. Limitada a 500 caracteres para não "
+            "virar NCLOB no Oracle. Registro clínico vai em EVOLUCAO."
+        ),
+    )
+    criado_em = models.DateTimeField("criado em", auto_now_add=True)
+    atualizado_em = models.DateTimeField("atualizado em", auto_now=True)
+
+    class Meta:
+        db_table = "CONSULTA"
+        verbose_name = "consulta"
+        verbose_name_plural = "consultas"
+        # Por ``-id``, e não por ``-criado_em``: a PK é sequencial, então a
+        # ordem é a mesma (mais recentes primeiro) e sai do índice da chave
+        # primária — um índice a menos para sustentar o ORDER BY de toda
+        # listagem do Admin.
+        ordering = ["-id"]
+        indexes = [
+            # "Histórico deste paciente" — tela de atendimento e pré-consulta.
+            # Também cobre a FK ``paciente``.
+            models.Index(fields=["paciente"], name="IDX_CONSULTA_PACIENTE"),
+            # "Minha agenda" [S3-12]: é esta coluna que justifica a
+            # desnormalização de ``medico``. Também cobre a FK.
+            models.Index(fields=["medico"], name="IDX_CONSULTA_MEDICO"),
+            # Painéis operacionais filtram por status (confirmadas de hoje,
+            # faltas do mês).
+            models.Index(fields=["status"], name="IDX_CONSULTA_STATUS"),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.paciente.nome} — {self.slot.data:%d/%m/%Y} "
+            f"{self.slot.hora_inicio:%H:%M} ({self.status})"
+        )

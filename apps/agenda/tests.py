@@ -1,8 +1,11 @@
-"""Testes dos models da agenda — ``AgendaSlot`` e ``AgendaRegra``.
+"""Testes dos models da agenda — ``AgendaSlot``, ``AgendaRegra`` e ``Consulta``.
 
 O teste central do slot é o da constraint anti-overbooking
 ``UK_SLOT_MEDICO_HORARIO`` `[S1-11]`: é a garantia que a ``ARQUITETURA.md``
-coloca no banco justamente para sobreviver a um bug da aplicação.
+coloca no banco justamente para sobreviver a um bug da aplicação. O da
+``Consulta`` `[S1-8]` é o par dessa garantia na outra ponta: o ``OneToOne``
+para o slot, que impede duas consultas no mesmo horário mesmo que o service de
+agendamento `[S3-7]` (que ainda não existe) tenha um bug de concorrência.
 
 Do lado da ``AgendaRegra`` `[S1-8]`, o foco são as invariantes que também moram
 no schema (``CK_AGENDA_REGRA_*``) e a chave ``UK_AGENDA_REGRA_JANELA``, que
@@ -21,8 +24,8 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 
-from apps.agenda.models import AgendaRegra, AgendaSlot
-from apps.crm.models import Medico
+from apps.agenda.models import AgendaRegra, AgendaSlot, Consulta
+from apps.crm.models import Medico, Paciente
 
 pytestmark = pytest.mark.django_db
 
@@ -286,3 +289,163 @@ def test_apagar_medico_com_regra_e_bloqueado(medica: Medico) -> None:
     _regra(medica)
     with pytest.raises(ProtectedError):
         medica.delete()
+
+
+# ---------------------------------------------------------------------------
+# Consulta — básico [S1-8]
+# ---------------------------------------------------------------------------
+
+
+def _paciente(nome: str = "Joana Prado", cpf: str = "12345678909") -> Paciente:
+    paciente = Paciente(nome=nome, data_nascimento=dt.date(1980, 5, 17))
+    paciente.definir_cpf(cpf)
+    paciente.save()
+    return paciente
+
+
+@pytest.fixture
+def joana() -> Paciente:
+    return _paciente()
+
+
+def _consulta(paciente: Paciente, slot: AgendaSlot, **overrides: object) -> Consulta:
+    dados: dict[str, object] = {
+        "paciente": paciente,
+        "slot": slot,
+        # Cópia deliberada de ``slot.medico`` — no fluxo real quem preenche é o
+        # AgendamentoService [S3-7], que ainda não existe.
+        "medico": slot.medico,
+    }
+    dados.update(overrides)
+    return Consulta.objects.create(**dados)
+
+
+def test_consulta_nasce_agendada_e_pela_recepcao(medica: Medico, joana: Paciente) -> None:
+    consulta = _consulta(joana, _slot(medica))
+
+    assert consulta.status == Consulta.Status.AGENDADA
+    assert consulta.origem == Consulta.Origem.RECEPCAO
+    assert consulta.observacoes == ""
+    assert consulta.criado_em is not None
+    assert consulta.atualizado_em is not None
+
+
+def test_consulta_do_chat_registra_a_origem(medica: Medico, joana: Paciente) -> None:
+    """``origem`` é o denominador da métrica de conversão do chatbot [S5-28]."""
+    consulta = _consulta(joana, _slot(medica), origem=Consulta.Origem.CHAT)
+    assert consulta.origem == Consulta.Origem.CHAT
+
+
+def test_consulta_str_mostra_paciente_data_e_status(medica: Medico, joana: Paciente) -> None:
+    consulta = _consulta(joana, _slot(medica))
+    assert str(consulta) == "Joana Prado — 12/08/2026 09:00 (AGENDADA)"
+
+
+def test_consulta_e_alcancavel_pelos_dois_lados(medica: Medico, joana: Paciente) -> None:
+    slot = _slot(medica)
+    consulta = _consulta(joana, slot)
+
+    slot.refresh_from_db()
+    assert slot.consulta == consulta
+    assert list(joana.consultas.all()) == [consulta]
+    assert list(medica.consultas.all()) == [consulta]
+
+
+def test_medico_da_consulta_e_copia_do_slot(medica: Medico, joana: Paciente) -> None:
+    """Desnormalização deliberada: "minha agenda" [S3-12] lê sem join."""
+    slot = _slot(medica)
+    consulta = _consulta(joana, slot)
+    assert consulta.medico_id == slot.medico_id
+
+
+# ---------------------------------------------------------------------------
+# Consulta — anti-overbooking (OneToOne com o slot)
+# ---------------------------------------------------------------------------
+
+
+def test_duas_consultas_no_mesmo_slot_sao_recusadas(medica: Medico, joana: Paciente) -> None:
+    """O OneToOne é a barreira que sobrevive a um bug de concorrência em [S3-7]."""
+    slot = _slot(medica)
+    _consulta(joana, slot)
+    outro = _paciente(nome="Carlos Lima", cpf="98765432100")
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        _consulta(outro, slot)
+
+
+def test_paciente_pode_ter_consultas_em_slots_diferentes(medica: Medico, joana: Paciente) -> None:
+    _consulta(joana, _slot(medica))
+    _consulta(joana, _slot(medica, hora_inicio=dt.time(10, 0), hora_fim=dt.time(10, 30)))
+    assert joana.consultas.count() == 2
+
+
+def test_slot_de_consulta_cancelada_continua_ocupado(medica: Medico, joana: Paciente) -> None:
+    """Cancelar muda o status; liberar o horário é decisão de [S3-7], não do model."""
+    slot = _slot(medica)
+    consulta = _consulta(joana, slot)
+    consulta.status = Consulta.Status.CANCELADA
+    consulta.save(update_fields=["status"])
+
+    outro = _paciente(nome="Carlos Lima", cpf="98765432100")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        _consulta(outro, slot)
+
+
+# ---------------------------------------------------------------------------
+# Consulta — PROTECT nos três lados
+# ---------------------------------------------------------------------------
+
+
+def test_apagar_paciente_com_consulta_e_bloqueado(medica: Medico, joana: Paciente) -> None:
+    """Retenção CFM: consulta é histórico clínico, arquivar usa ``Paciente.ativo``."""
+    _consulta(joana, _slot(medica))
+    with pytest.raises(ProtectedError):
+        joana.delete()
+
+
+def test_apagar_medico_com_consulta_e_bloqueado(medica: Medico, joana: Paciente) -> None:
+    _consulta(joana, _slot(medica))
+    with pytest.raises(ProtectedError):
+        medica.delete()
+
+
+def test_apagar_slot_com_consulta_e_bloqueado(medica: Medico, joana: Paciente) -> None:
+    """Apagar o slot apagaria a prova de quando a consulta foi marcada."""
+    slot = _slot(medica)
+    _consulta(joana, slot)
+    with pytest.raises(ProtectedError):
+        slot.delete()
+
+
+# ---------------------------------------------------------------------------
+# Consulta — convenções de schema (Oracle)
+# ---------------------------------------------------------------------------
+
+
+def test_tabela_da_consulta_em_upper_snake_case() -> None:
+    assert Consulta._meta.db_table == "CONSULTA"
+
+
+def test_indices_da_consulta_tem_nome_explicito_e_curto() -> None:
+    nomes = [c.name for c in Consulta._meta.constraints]
+    nomes += [i.name for i in Consulta._meta.indexes]
+
+    assert "IDX_CONSULTA_PACIENTE" in nomes
+    assert "IDX_CONSULTA_STATUS" in nomes
+    for nome in nomes:
+        assert nome == nome.upper(), f"{nome} deveria estar em UPPER_SNAKE_CASE"
+        assert len(nome) <= 30, f"{nome} tem {len(nome)} chars (limite do Oracle é 30)"
+
+
+def test_fks_da_consulta_nao_criam_indice_duplicado() -> None:
+    """`db_index=True` + índice nomeado (ou UNIQUE) na mesma coluna = ORA-01408."""
+    for nome_campo in ("paciente", "slot", "medico"):
+        assert Consulta._meta.get_field(nome_campo).db_index is False, nome_campo
+
+
+def test_consulta_nao_tem_campo_textfield() -> None:
+    """TextField vira NCLOB no Oracle — ``observacoes`` entra em WHERE/ORDER BY."""
+    from django.db import models as dj_models
+
+    for campo in Consulta._meta.get_fields():
+        assert not isinstance(campo, dj_models.TextField), f"{campo.name} é TextField"

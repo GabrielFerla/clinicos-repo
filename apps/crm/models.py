@@ -4,7 +4,8 @@
 chatbot precisa para responder "quais especialidades vocês atendem?" e "quem
 atende retina?" (ver ``docs/CHAT_MVP.md``, Bloco 1A). ``Paciente`` entrou
 depois (S1-8), trazendo junto a decisão de CPF cifrado — ver a docstring da
-classe. ``Lead`` e ``Consulta`` seguem fora deste módulo.
+classe. ``Lead`` fecha o app com o funil do CRM (S1-8/S5-22). ``Consulta`` fica
+em ``apps/agenda`` — é lá que mora o ``AgendamentoService`` que a escreve.
 
 Convenções aplicadas aqui e replicadas nos demais apps de domínio:
 
@@ -482,3 +483,116 @@ class Paciente(models.Model):
         if not digitos:
             return ""
         return f"***.***.{digitos[6:9]}-{digitos[9:]}"
+
+
+class Lead(models.Model):
+    """Contato iniciado no chat que ainda não virou (ou acabou de virar) consulta.
+
+    É o funil do CRM `[S5-22]`, com as cinco etapas na ordem em que o negócio
+    as usa: ``NOVO`` (alguém falou com o bot) → ``QUALIFICADO`` (informou
+    contato e interesse) → ``AGENDADO`` (virou :class:`agenda.Consulta`) →
+    ``COMPARECEU`` (apareceu na clínica) → ``RETORNO`` (voltou ou precisa
+    voltar). O model **não** impõe a sequência: um lead pode pular etapa (a
+    recepção qualifica e agenda no mesmo atendimento) e pode voltar atrás
+    (desmarcou). Codificar a máquina de estados no schema quebraria os dois
+    casos, e a única transição automática prevista — ``AGENDADO`` quando o chat
+    fecha o agendamento — é `[S5-24]`, não este model.
+
+    Lead **não** é paciente. Só existe CPF, prontuário e retenção CFM depois da
+    conversão; aqui há nome e contato voluntários, e por isso nada de
+    ``UniqueConstraint``: a mesma pessoa pode voltar em outra conversa, meses
+    depois, e isso é um lead novo — não um duplicado a ser recusado.
+
+    Attributes:
+        conversa_id: Conversa do chatbot que originou o lead. É ``UUIDField``
+            solto e **não** FK para ``chatbot.InteracaoChat`` porque aquela
+            tabela tem uma linha *por turno*: apontar para uma delas escolheria
+            arbitrariamente um turno para representar o diálogo inteiro, e o
+            lead se liga à conversa como um todo. O preço é não ter integridade
+            referencial nessa ponta — aceito, já que ``InteracaoChat`` é
+            auditoria append-only e não some. ``NULL`` cobre o lead cadastrado
+            à mão pela recepção, que não veio de conversa nenhuma.
+        consulta: Conversão do lead `[S5-24]`. ``SET_NULL`` e não ``PROTECT``:
+            se a consulta for removida, o lead precisa sobreviver — perder o
+            registro de que o contato existiu apagaria a origem da métrica de
+            conversão do chatbot. O histórico de que ele chegou a agendar fica
+            em ``etapa``.
+        especialidade_interesse: O que a pessoa procurava. ``PROTECT`` porque
+            apagar uma especialidade não pode levar o funil junto; ``NULL``
+            enquanto a triagem `[S5-11]` não concluiu.
+    """
+
+    class Etapa(models.TextChoices):
+        NOVO = "NOVO", "Novo"
+        QUALIFICADO = "QUALIFICADO", "Qualificado"
+        AGENDADO = "AGENDADO", "Agendado"
+        COMPARECEU = "COMPARECEU", "Compareceu"
+        RETORNO = "RETORNO", "Retorno"
+
+    nome = models.CharField("nome", max_length=150)
+    email = models.EmailField(
+        "e-mail",
+        blank=True,
+        help_text="Opcional: o lead começa antes de a pessoa informar contato.",
+    )
+    telefone = models.CharField("telefone", max_length=20, blank=True)
+    especialidade_interesse = models.ForeignKey(
+        Especialidade,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="leads",
+        verbose_name="especialidade de interesse",
+        # FK não coberta por outra constraint; sem índice o Oracle trava a
+        # tabela pai durante DML. O índice existe em Meta.indexes, nomeado.
+        db_index=False,
+    )
+    etapa = models.CharField(
+        "etapa",
+        max_length=12,
+        choices=Etapa.choices,
+        default=Etapa.NOVO,
+        # Coberto por IDX_LEAD_ETAPA (o funil do Admin [S5-23] filtra por aqui);
+        # ``db_index=True`` criaria um segundo índice com nome autogerado.
+        db_index=False,
+    )
+    conversa_id = models.UUIDField(
+        "conversa",
+        null=True,
+        blank=True,
+        db_index=False,  # coberto por IDX_LEAD_CONVERSA
+        help_text="UUID da conversa do chatbot (InteracaoChat.conversa_id) que originou o lead.",
+    )
+    consulta = models.ForeignKey(
+        "agenda.Consulta",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="leads",
+        verbose_name="consulta",
+        db_index=False,  # coberto por IDX_LEAD_CONSULTA
+    )
+    criado_em = models.DateTimeField("criado em", auto_now_add=True)
+    atualizado_em = models.DateTimeField("atualizado em", auto_now=True)
+
+    class Meta:
+        db_table = "LEAD"
+        verbose_name = "lead"
+        verbose_name_plural = "leads"
+        # Mesmo raciocínio de ``Consulta``: ``-id`` dá a ordem de chegada
+        # invertida (lead mais novo primeiro, que é como o funil se lê) sem
+        # exigir um índice só para o ORDER BY.
+        ordering = ["-id"]
+        indexes = [
+            # O funil do Admin [S5-23] e o dashboard por etapa [S5-25] filtram
+            # e agrupam por esta coluna.
+            models.Index(fields=["etapa"], name="IDX_LEAD_ETAPA"),
+            # "Esta conversa já gerou lead?" — a pergunta que [S5-12] faz a
+            # cada agendamento pelo chat, para não duplicar o registro.
+            models.Index(fields=["conversa_id"], name="IDX_LEAD_CONVERSA"),
+            models.Index(fields=["especialidade_interesse"], name="IDX_LEAD_ESPECIALIDADE"),
+            models.Index(fields=["consulta"], name="IDX_LEAD_CONSULTA"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.nome} ({self.get_etapa_display()})"
