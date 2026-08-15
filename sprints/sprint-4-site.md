@@ -18,12 +18,12 @@
 - [ ] **S4-3** Coleta de conteúdo real da clínica (textos, fotos, equipe) · **TODOS** · 4h
 
 ### Estrutura base
-- [ ] **S4-4** Layout base com header, footer, menu responsivo · **FRONT** · 6h
-- [ ] **S4-5** Sistema de componentes Tailwind: botões, cards, formulários, badges · **FRONT** · 5h
+- [x] **S4-4** Layout base com header, footer, menu responsivo · **FRONT** · 6h
+- [x] **S4-5** Sistema de componentes Tailwind: botões, cards, formulários, badges · **FRONT** · 5h
 - [ ] **S4-6** Configuração de internacionalização (português-BR) · **BACK** · 2h
 
 ### Páginas
-- [ ] **S4-7** Página inicial: hero, especialidades em destaque, depoimentos, CTA forte · **FRONT** · 8h
+- [x] **S4-7** Página inicial: hero, especialidades em destaque, depoimentos, CTA forte · **FRONT** · 8h
 - [ ] **S4-8** Página de Especialidades com conteúdo oftalmológico real · **FRONT+DESIGN** · 6h
 - [ ] **S4-9** Página individual de cada subespecialidade (refrativa, catarata, etc.) · **FRONT** · 6h
 - [ ] **S4-10** Página de Equipe Médica (puxa do banco, fotos otimizadas) · **FRONT+BACK** · 5h
@@ -33,7 +33,7 @@
 - [ ] **S4-14** Páginas legais: política de privacidade, termos, política de cookies · **FRONT+BACK** · 4h
 
 ### CTAs e conversão
-- [ ] **S4-15** Botão flutuante "Agendar consulta" visível em todas as páginas · **FRONT** · 2h
+- [x] **S4-15** Botão flutuante "Agendar consulta" visível em todas as páginas · **FRONT** · 2h
 - [ ] **S4-16** Banner de cookies LGPD com aceite registrado · **FRONT+BACK** · 3h
 
 ### Qualidade e performance
@@ -48,6 +48,17 @@
 - [ ] **S4-23** Domínio de staging com HTTPS configurado · **DEVOPS** · 2h
 
 ---
+
+## Notas da execução (2026-08-15)
+
+O design final chegou como o design system **Broadsheet** (ver `docs/DESIGN_SYSTEM.md`) e trouxe duas divergências em relação ao que estas tarefas descreviam. Ficam registradas aqui em vez de serem absorvidas em silêncio:
+
+- **S4-7 — não há "depoimentos".** O design substitui a seção de depoimentos por uma **orientação de preparo em destaque** (a citação sobre dilatação da pupila). É uma escolha deliberada: clínica oftalmológica converte por confiança operacional, não por prova social. Se depoimentos forem requisito do cliente piloto, é escopo novo.
+- **S4-15 — o botão flutuante é o assistente, não "Agendar consulta".** No design o elemento fixo no canto é o chat ("Dúvidas?"), e o CTA de agendar vive na nav *sticky*, portanto visível em toda página e em toda rolagem. A intenção da tarefa (CTA sempre alcançável) está atendida; o elemento, não é o descrito.
+
+Também entregue fora da lista: **S1-18** (paleta, tipografia e design tokens), que estava pendente na Sprint 1 e bloqueava esta sprint — os tokens reais agora vivem em `apps/theme/static_src/src/styles.css`.
+
+Ainda **não** feito nestas tarefas: o formulário de contato é visual e não grava `Lead` (isso é a S4-11), e as caixas de foto estão vazias aguardando a coleta de conteúdo da S4-3.
 
 ## Definition of Done
 

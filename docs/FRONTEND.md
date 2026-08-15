@@ -56,12 +56,19 @@ Fluxo típico:
 - **Parciais Django reutilizáveis** → `apps/theme/templates/components/`.
   Padrão de nome: `_nome.html` (prefixo `_` deixa claro que é parcial).
   Importe com `{% include "components/_botao.html" %}`.
-- **Classes utilitárias customizadas** → bloco `@layer components` em
-  `apps/theme/static_src/src/styles.css`. Usar `@apply` para combinar
-  utilitários Tailwind.
-- **Tema (cores, fontes, etc.)** → `theme.extend` em
-  `apps/theme/static_src/tailwind.config.js`. Os design tokens reais saem
-  da S1-18 (Design).
+- **Classes de componente** → `apps/theme/static_src/src/styles.css`, em CSS
+  puro, **fora** de `@layer components`. Não é preciosismo: o Tailwind faz
+  tree-shaking do que está dentro de `@layer`, emitindo só as classes que
+  encontrou nos globs de `content`. Foi por isso que o `.btn`/`.btn-primary`
+  original — que morava em `@layer components` e não era usado em template
+  nenhum — sumia do CSS compilado. Em CSS puro nada é descartado, e a cascata
+  continua certa porque `@tailwind utilities` vem por último no arquivo.
+- **Tema (cores, fontes, etc.)** → o `:root` de
+  `apps/theme/static_src/src/styles.css` é a **fonte da verdade** [S1-18]. O
+  `theme.extend` do `tailwind.config.js` apenas espelha esses tokens
+  (`paper`, `ink`, `accent`, `accent2`, `surface`…) apontando para as mesmas
+  `var(--*)`, para que utilitário e classe de componente nunca divirjam.
+  Retune num lugar só: o `:root`.
 
 ## Content globs do Tailwind
 
@@ -76,9 +83,35 @@ está configurado para varrer:
 Se você criar templates fora desses diretórios, **adicione o glob no
 `content`** ou as classes vão sumir no build de produção.
 
-## Wireframes vs. CSS
+## Identidade visual
 
-S1-18/S1-19/S1-20 (Design) entregam paleta, tipografia e wireframes. Até lá
-trabalhe com utilitários Tailwind puros — o `base.html` e o `.btn-primary`
-deste sprint são placeholders que **vão ser refeitos** com a identidade
-visual real.
+A identidade chegou na S4 e **não é mais placeholder**: o projeto adota o
+design system **Broadsheet** — jornal impresso na web, Source Serif 4
+quase-preta sobre papel, ciano e magenta como tintas de processo usadas
+pequenas. O guia está em [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md); leia a caixa
+do topo, que mapeia o guia original para o que existe neste repositório.
+
+Duas regras do sistema que valem como critério de review:
+
+- **A página não se estrutura com réguas, bordas ou caixas.** A separação entre
+  seções é espaço em branco. O `.card` é o único componente com caixa e fica
+  reservado a itens discretos (listagens), nunca para montar layout. As duas
+  réguas permitidas são móveis de primeira página: `.regra-dupla` e
+  `.regra-fina`.
+- **Não introduza sans-serif para cromo de interface.** O serif *é* o cromo.
+
+Layouts disponíveis em `apps/theme/templates/components/`:
+
+| Layout | Para quê |
+|---|---|
+| `_layout_publico.html` | Site público. Nav sticky com menu responsivo, rodapé de 4 colunas, assistente flutuante. Espera `clinica` e `chat_sugestoes` no contexto. |
+| `_layout_admin.html` | Telas internas (recepção/médico). Nav de módulos e identificação do usuário. |
+| `_layout.html` | O contêiner simples de `max-w-7xl`. Usado hoje pelo `/chat/`. |
+
+⚠️ `{% extends %}` tem de ser a **primeira tag** do arquivo — um `{% comment %}`
+acima dele derruba o template inteiro com `TemplateSyntaxError`. E o comentário
+de cerquilha `{# … #}` do Django é de **uma linha só**: em várias linhas ele
+vaza como texto na página.
+
+Ainda pendentes do Design: **S1-19** (logo) e **S1-20** (wireframes). Hoje a
+marca é o nome da clínica em Source Serif 4, sem símbolo.

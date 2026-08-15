@@ -2,19 +2,28 @@
   Um turno da conversa: o balão da pergunta e o destino da resposta.
 
   Devolvido pelo POST de `chatbot:mensagem`. O `data-stream` carrega a URL do
-  SSE; o script da página abre o EventSource ao ver este bloco chegar.
-{% endcomment %}
-<div class="space-y-3" data-turno data-stream="{{ url_stream }}" data-pergunta="{{ pergunta }}">
-  <div class="flex justify-end">
-    <p class="max-w-[80%] rounded-2xl rounded-br-sm bg-sky-600 px-4 py-2 text-white whitespace-pre-wrap">{{ pergunta }}</p>
-  </div>
+  SSE; o `chat.js` abre o EventSource ao ver este bloco chegar.
 
-  <div class="flex justify-start">
-    <div class="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2 shadow-sm ring-1 ring-gray-200">
-      {# O status some quando o primeiro token chega. #}
-      <p data-status class="text-sm italic text-gray-500">Pensando…</p>
-      <p data-resposta class="whitespace-pre-wrap text-gray-900"></p>
-      <p data-erro class="hidden text-sm text-red-600"></p>
-    </div>
+  Serve aos DOIS consumidores — a página `/chat/` e o painel flutuante da
+  landing —, então nada aqui pode assumir a largura do container. As medidas são
+  relativas (`max-width: 88%`) e as cores saem dos tokens do Broadsheet.
+
+  Status e erro escondem-se pelo atributo `hidden`, não por classe: o `chat.js`
+  alterna `.hidden = true/false`, e o `[hidden]` do styles.css garante que
+  nenhum `display` do CSS vença o atributo.
+{% endcomment %}
+<div style="display: flex; flex-direction: column; gap: var(--space-2);"
+     data-turno
+     data-stream="{{ url_stream }}"
+     data-pergunta="{{ pergunta }}">
+
+  <div style="align-self: flex-end; max-width: 88%; background: var(--color-accent-700); color: var(--color-neutral-100); border-radius: var(--radius-md); padding: 10px 14px; font-size: 15.5px; line-height: 24px; white-space: pre-wrap;">{{ pergunta }}</div>
+
+  <div style="align-self: flex-start; max-width: 88%; background: var(--color-neutral-100); box-shadow: var(--shadow-sm); border-radius: var(--radius-md); padding: 10px 14px; font-size: 15.5px; line-height: 24px;">
+    {# O status some quando o primeiro token chega. #}
+    <p data-status
+       style="margin: 0; font-style: italic; color: var(--color-neutral-600); animation: pulsar 1.2s ease-in-out infinite;">Pensando…</p>
+    <p data-resposta style="margin: 0; white-space: pre-wrap;"></p>
+    <p data-erro hidden style="margin: 8px 0 0; font-size: 13px; line-height: 20px; color: var(--color-accent-2-700);"></p>
   </div>
 </div>

@@ -156,6 +156,10 @@ figcaption {
 .text-muted { color: color-mix(in srgb, var(--color-text) 55%, transparent); }
 
 /* Estados de foco temáticos — nunca o anel azul padrão do browser. */
+/* O `hidden` do HTML perde para qualquer `display` vindo do CSS, e o chat
+   liga/desliga status e erro justamente por ele. Isto blinda o atributo. */
+[hidden] { display: none !important; }
+
 :focus { outline: none; }
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 ::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
@@ -416,6 +420,126 @@ textarea.input { min-height: 90px; resize: vertical; }
 .nav-brand { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 18px; margin-right: auto; }
 .nav a { color: inherit; text-decoration: none; font-size: 14px; }
 .nav a:hover, .nav a[aria-current='page'], .nav a[aria-current='location'] { color: var(--color-accent-700); }
+
+/* Menu do site público [S4-4] — barra no largo, disclosure nativo no estreito.
+   O corte é 860px porque é ali que a marca mais os cinco itens começam a
+   colidir: medido nesta nav, não herdado de um breakpoint padrão. Sem
+   JavaScript: `<details>`/`<summary>` já dá teclado e estado de graça. */
+.nav-links { display: flex; align-items: center; gap: 30px; }
+.nav-menu { display: none; position: relative; margin-left: auto; }
+.nav-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+.nav-menu > summary::-webkit-details-marker { display: none; }
+.nav-menu > summary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.nav-menu-painel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-md);
+}
+.nav-menu-painel a { font-size: 16px; }
+
+@media (max-width: 860px) {
+  .nav-publica .nav-links { display: none; }
+  .nav-menu { display: block; }
+}
+
+/* Assistente flutuante [S4-15]. O painel é `position: fixed` junto do botão,
+   ancorado ao canto; no estreito ele ocupa a largura útil menos as margens. */
+.chat-flutuante {
+  position: fixed;
+  right: clamp(16px, 3vw, 30px);
+  bottom: clamp(16px, 3vw, 30px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+.chat-flutuante-painel {
+  width: 380px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 130px);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-neutral-100);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  animation: subir 180ms ease-out;
+}
+.chat-flutuante-topo {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 14px var(--space-4);
+  background: var(--color-text);
+  color: var(--color-neutral-100);
+}
+.chat-flutuante-fechar {
+  background: none;
+  border: none;
+  color: var(--color-neutral-300);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.chat-flutuante-fechar:hover { color: var(--color-neutral-100); }
+.chat-flutuante-conversa {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-bg);
+}
+.chat-flutuante-base {
+  flex: 0 0 auto;
+  padding: 14px var(--space-4) var(--space-4);
+  background: var(--color-neutral-100);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.chat-flutuante-botao {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-accent-700);
+  color: var(--color-neutral-100);
+  border: none;
+  border-radius: 999px;
+  padding: 14px 22px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+.chat-flutuante-botao:hover { background: var(--color-accent-600); }
 
 /* — tabelas — */
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }

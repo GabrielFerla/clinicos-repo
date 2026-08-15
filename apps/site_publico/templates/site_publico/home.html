@@ -1,0 +1,300 @@
+{% extends "components/_layout_publico.html" %}
+{% comment %}
+  Landing pública da clínica — [S4-7].
+
+  ATENÇÃO: o `extends` acima precisa continuar sendo a **primeira tag** do
+  arquivo. Um comentário antes dele derruba o template inteiro com
+  `TemplateSyntaxError: must be the first tag`. Já aconteceu neste repo — o
+  comentário vem depois, sempre.
+
+  Segunda armadilha, que vale para os comentários daqui de baixo: o comentário
+  de chave-cerquilha é **de uma linha só**. O lexer do Django não casa `.` com
+  quebra de linha, então um comentário desses aberto em três linhas não vira
+  comentário nenhum: vira texto literal, visível na página. Por isso todo
+  comentário de mais de uma linha aqui usa a tag `comment`.
+
+  O que esta página NÃO faz, de propósito:
+
+  * **Não recria nav, rodapé nem chat.** Os três moram no
+    `components/_layout_publico.html`; aqui só preenchemos `main`. Por isso
+    também não sobrescrevemos `extra_head`/`extra_body`: fazer isso sem
+    `block.super` mataria o CSS do menu e o script do assistente.
+  * **Não envia o formulário.** A seção "Agendar" é visual: sem `action`, sem
+    `method`, sem `csrf_token`. Gravar o `Lead` no CRM é a **S4-11** — até lá o
+    botão não deve prometer nada que o backend não cumpra.
+  * **Não carrega foto.** Onde o protótipo tinha o web component `<image-slot>`
+    (65 KB de JavaScript de ferramenta de design), aqui existe só uma caixa com
+    a proporção certa e preenchimento neutro, pronta para receber um `<img>`
+    quando houver fotografia de verdade. A proporção fica na caixa, e não na
+    imagem, para o layout não pular quando a foto entrar.
+
+  Sobre o estilo inline: é intencional e combina com o resto do repo. O que é
+  **componente** (`.btn`, `.table`, `.seg`, `.halftone`, `.cmyk-head`,
+  `.cmyk-num`, `.regra-dupla`, `.regra-fina`, `.sobrelinha`, `.conduto`) vem do
+  `styles.css`; o que é **composição desta página** (paddings de seção, larguras
+  de medida, grids) fica aqui, porque só existe aqui e não vale uma classe na
+  folha global.
+
+  Acessibilidade [S4-19]: as chapas `.plate` do CMYK repetem texto que já está
+  no `.paper`, então vão todas `aria-hidden="true"` — o leitor de tela lê a
+  manchete uma vez. As caixas de foto vazias são decorativas e não anunciam
+  nada. Todo campo do formulário tem `<label>` de verdade envolvendo o controle,
+  e o grupo de rádios tem `<fieldset>`/`<legend>`.
+{% endcomment %}
+
+{% block title %}{{ clinica.nome }} — oftalmologia, exames e cinco subespecialidades{% endblock %}
+{% block og_title %}{{ clinica.nome }}{% endblock %}
+
+{% block main %}
+
+{% comment %}
+  ── 1. Hero ────────────────────────────────────────────────────────────────
+  A terceira linha da manchete é impressa como chapas de processo: o `.paper`
+  carrega o texto legível e as três `.plate` repetem o mesmo texto deslocado.
+  O `-0.035em` de margem à esquerda compensa o vazio óptico da versal inicial.
+{% endcomment %}
+<section style="max-width: 1200px; margin: 0 auto; padding: 112px clamp(20px, 5vw, 72px) 84px;">
+  <h1 style="margin: 0 0 0 -0.035em; font-family: var(--font-heading); font-weight: 600; font-size: clamp(42px, 6vw, 80px); line-height: 1.08; letter-spacing: -0.02em;">
+    <span style="display: block;">Uma clínica inteira</span>
+    <span style="display: block;">para os seus olhos —</span>
+    <span class="cmyk-head" style="display: block;">
+      <span class="paper">no mesmo lugar.</span>
+      <span class="plate plate-c" aria-hidden="true">no mesmo lugar.</span>
+      <span class="plate plate-m" aria-hidden="true">no mesmo lugar.</span>
+      <span class="plate plate-y" aria-hidden="true">no mesmo lugar.</span>
+    </span>
+  </h1>
+  <p style="margin: 42px 0 0; font-size: 17px; line-height: 28px; max-width: 58ch; color: color-mix(in srgb, var(--color-text) 82%, transparent);">
+    Cinco oftalmologistas, cinco subespecialidades e os exames de imagem no mesmo prédio da consulta — do exame de vista de rotina ao acompanhamento de glaucoma, retina e córnea. No Centro de Porto Alegre, a duas quadras da estação Mercado, com estacionamento conveniado.
+  </p>
+  <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 28px;">
+    <a href="#agendar" class="btn btn-primary" style="font-size: 17px; padding: 12px 24px;">Agendar consulta</a>
+    <a href="#especialidades" class="btn btn-secondary" style="font-size: 17px; padding: 12px 24px;">Ver especialidades</a>
+  </div>
+  <p style="margin: 20px 0 0; font-size: 15.5px; line-height: 28px; color: color-mix(in srgb, var(--color-text) 70%, transparent);">
+    Dúvida rápida sobre convênio, preço ou preparo? <a href="#" data-abrir-chat>Pergunte aqui mesmo</a>.
+  </p>
+</section>
+
+{% comment %}
+  ── 2. Trilho de primeira página ───────────────────────────────────────────
+  A régua grossa-fina (`.regra-dupla`) é o único filete que este sistema
+  imprime de propósito: é mobiliário de manchete, não divisória de seção.
+  O `.conduto` pontilhado é decorativo — vai `aria-hidden` para não virar
+  ruído entre o rótulo e o número.
+{% endcomment %}
+<section style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 70px;">
+  <div class="regra-dupla"></div>
+  <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px 28px; padding: 14px 0; font-size: 13px; line-height: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 70%, transparent);">
+    <span>{{ dateline.endereco }}</span>
+    <span>{{ dateline.horarios }}</span>
+    <span>{{ dateline.contato }}</span>
+  </div>
+  <div class="regra-fina"></div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px 70px; padding: 14px 0 28px;">
+    {% for item in indice %}
+      <p style="display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 15.5px; line-height: 28px;">
+        <span>{{ item.titulo }}</span>
+        <span class="conduto" aria-hidden="true"></span>
+        <span style="font-family: var(--font-heading); font-weight: 600; font-size: 17px;">{{ item.valor }}</span>
+      </p>
+    {% endfor %}
+  </div>
+</section>
+
+{% comment %}
+  ── 3. As três colunas ─────────────────────────────────────────────────────
+  Texto justificado com `hyphens: auto`: sem a hifenização, a justificação
+  abriria rios de espaço branco nas colunas estreitas.
+{% endcomment %}
+<section style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 84px;">
+  <span class="sobrelinha">Antes de vir, o que você precisa saber</span>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 42px clamp(28px, 4vw, 64px);">
+    {% for coluna in colunas %}
+      <div>
+        <h2 style="margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: 24px; line-height: 28px; letter-spacing: -0.01em;">{{ coluna.titulo }}</h2>
+        <p style="margin: 14px 0 0; font-size: 15.5px; line-height: 28px; text-align: justify; hyphens: auto; color: color-mix(in srgb, var(--color-text) 78%, transparent);">{{ coluna.texto }}</p>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% comment %}
+  ── 4. Especialidades ──────────────────────────────────────────────────────
+  O numeral também é chapa de processo — mesma construção da manchete, com
+  `.cmyk-num`. O `indice` já chega zero-padded do `content.py`, porque o
+  Django não formata número dentro do template sem filtro extra.
+{% endcomment %}
+<section id="especialidades" style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 84px;">
+  <span class="sobrelinha">Especialidades</span>
+  <h2 style="margin: 0 0 42px; font-family: var(--font-heading); font-weight: 600; font-size: clamp(28px, 3.4vw, 42px); line-height: 1.12; letter-spacing: -0.015em; max-width: 24ch;">Cinco áreas, todas dentro da oftalmologia</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 42px clamp(28px, 4vw, 64px);">
+    {% for esp in especialidades %}
+      <div style="display: flex; gap: 20px; align-items: flex-start;">
+        <span class="cmyk-num" style="font-family: var(--font-heading); font-weight: 600; font-size: 40px; flex: 0 0 auto;">
+          <span class="paper">{{ esp.indice }}</span>
+          <span class="plate plate-c" aria-hidden="true">{{ esp.indice }}</span>
+          <span class="plate plate-m" aria-hidden="true">{{ esp.indice }}</span>
+          <span class="plate plate-y" aria-hidden="true">{{ esp.indice }}</span>
+        </span>
+        <div>
+          <h3 style="margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: 24px; line-height: 28px;">{{ esp.nome }}</h3>
+          <p style="margin: 8px 0 0; font-size: 15.5px; line-height: 28px; color: color-mix(in srgb, var(--color-text) 78%, transparent);">{{ esp.descricao }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% comment %}
+  ── 5. Exames: chamada e figura ────────────────────────────────────────────
+  A caixa da figura guarda a proporção 986/660 do protótipo. Enquanto não há
+  fotografia, ela é só papel neutro sob a retícula do `.halftone`. Quando a
+  foto chegar, troque o `div` interno por
+  `<img style="display: block; width: 100%; height: 100%; object-fit: cover;">`
+  e mantenha o `aspect-ratio` no elemento de fora — e aí a figura deixa de ser
+  decorativa: tire o `aria-hidden` e dê um `alt` de verdade.
+{% endcomment %}
+<section id="exames" style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 56px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 28px clamp(24px, 5vw, 96px); align-items: center;">
+  <div>
+    <span class="sobrelinha">Exames e equipamentos</span>
+    <h2 style="margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: clamp(26px, 3vw, 34px); line-height: 1.24; letter-spacing: -0.015em;">Diagnóstico no mesmo prédio, no mesmo dia da consulta</h2>
+    <p style="margin: 20px 0 0; font-size: 15.5px; line-height: 28px; max-width: 48ch; text-align: justify; hyphens: auto; color: color-mix(in srgb, var(--color-text) 78%, transparent);">
+      A consulta particular custa R$ 350,00 e já inclui a avaliação completa com refração. Pacientes de convênio costumam ter cobertura dos exames mediante autorização prévia — a recepção faz essa checagem antes de você vir, e o assistente informa o que ficou pendente.
+    </p>
+  </div>
+  <figure class="halftone" style="margin: 0;" aria-hidden="true">
+    <div style="aspect-ratio: 986 / 660; background: var(--color-surface);"></div>
+  </figure>
+</section>
+
+{% comment %}
+  ── 6. Tabela de exames ────────────────────────────────────────────────────
+  17px em vez dos 14px do `.table`: aqui a tabela é matéria de primeira
+  página, não grade de painel administrativo.
+{% endcomment %}
+<section style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 84px;">
+  <table class="table" style="width: 100%; font-size: 17px;">
+    <thead>
+      <tr>
+        <th scope="col" style="text-align: left;">Exame</th>
+        <th scope="col" style="text-align: left;">Para que serve</th>
+        <th scope="col" style="text-align: right;">Particular</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for exame in exames %}
+        <tr>
+          <td style="font-weight: 600;">{{ exame.nome }}</td>
+          <td style="color: color-mix(in srgb, var(--color-text) 78%, transparent);">{{ exame.uso }}</td>
+          <td style="text-align: right; white-space: nowrap;">{{ exame.preco }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% comment %}
+  ── 7. Citação em destaque ─────────────────────────────────────────────────
+  Os `text-indent` negativos penduram a aspa de abertura e o travessão fora da
+  margem, para o bloco de texto ficar opticamente alinhado com o resto da
+  página. Os valores são medidos para esta fonte de display: trocar o corpo do
+  texto pede remedir.
+{% endcomment %}
+<figure style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 98px;">
+  <blockquote style="margin: 0; font-family: var(--font-heading); font-style: italic; font-weight: 400; font-size: clamp(24px, 2.6vw, 34px); line-height: 42px; letter-spacing: -0.01em; max-width: 34ch; text-indent: -0.475em;">{{ citacao.texto }}</blockquote>
+  <figcaption style="margin: 42px 0 0; font-size: 15.5px; line-height: 28px; color: color-mix(in srgb, var(--color-text) 70%, transparent); text-indent: -1.045em;">{{ citacao.autoria }}</figcaption>
+</figure>
+
+{% comment %}
+  ── 8. Corpo clínico ───────────────────────────────────────────────────────
+  Retratos em 4/5. As caixas seguem vazias e decorativas até haver fotografia;
+  o `slot_id` de cada médico no `content.py` é o nome que o arquivo de imagem
+  deve ter quando entrar. O CRM em versalete é identificação profissional, não
+  decoração: continua sendo lido por leitor de tela.
+{% endcomment %}
+<section id="corpo-clinico" style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 84px;">
+  <span class="sobrelinha">Corpo clínico</span>
+  <h2 style="margin: 0 0 42px; font-family: var(--font-heading); font-weight: 600; font-size: clamp(28px, 3.4vw, 42px); line-height: 1.12; letter-spacing: -0.015em;">Quem atende você</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 28px;">
+    {% for medico in medicos %}
+      <figure style="margin: 0;">
+        <div class="halftone" style="margin-bottom: 14px;" aria-hidden="true" data-slot="{{ medico.slot_id }}">
+          <div style="aspect-ratio: 4 / 5; background: var(--color-surface);"></div>
+        </div>
+        <figcaption>
+          <h3 style="margin: 0 0 4px; font-family: var(--font-heading); font-weight: 600; font-size: 20px; line-height: 1.2;">{{ medico.nome }}</h3>
+          <p style="margin: 0 0 6px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 70%, transparent);">{{ medico.crm }}</p>
+          <p style="margin: 0; font-size: 15.5px; line-height: 24px; color: color-mix(in srgb, var(--color-text) 78%, transparent);">{{ medico.areas }}</p>
+        </figcaption>
+      </figure>
+    {% endfor %}
+  </div>
+</section>
+
+{% comment %}
+  ── 9. Captação de lead ────────────────────────────────────────────────────
+  Formulário VISUAL: sem `action`, sem `method`, sem `csrf_token`, porque ainda
+  não há para onde postar. Persistir o lead no CRM é a **S4-11** — quando ela
+  entrar, este `<form>` ganha `method="post"`, o token e a view de destino. Os
+  atributos `name` já estão nomeados como o backend vai querer receber.
+
+  Também não há a mensagem de "obrigado" do protótipo: ela dependia do estado
+  de JavaScript do componente de design, e sem POST não haveria o que confirmar.
+{% endcomment %}
+<section id="agendar" style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 84px;">
+  <div class="regra-dupla" style="margin-bottom: 42px;"></div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 42px clamp(28px, 5vw, 84px); align-items: start;">
+    <div>
+      <h2 style="margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: clamp(26px, 3vw, 34px); line-height: 1.24; letter-spacing: -0.015em;">Prefere que a gente ligue?</h2>
+      <p style="margin: 20px 0 0; font-size: 15.5px; line-height: 28px; max-width: 44ch; color: color-mix(in srgb, var(--color-text) 78%, transparent);">
+        Deixe seu WhatsApp e a recepção retorna no próximo horário comercial com as vagas do médico certo para o seu caso. Se preferir, ligue: atendemos de segunda a sexta das 08h às 19h e sábado das 08h às 13h.
+      </p>
+      <p style="margin: 28px 0 0; font-size: 15.5px; line-height: 28px;">
+        {{ clinica.telefone }} · WhatsApp {{ clinica.whatsapp }} · <a href="#" data-abrir-chat>dúvida rápida aqui</a>
+      </p>
+      <p style="margin: 14px 0 0; font-size: 13px; line-height: 24px; color: color-mix(in srgb, var(--color-text) 70%, transparent); max-width: 44ch;">
+        Cancelamento e remarcação gratuitos até 24 horas antes. Não atendemos pelo SUS.
+      </p>
+    </div>
+
+    <form style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 20px;">
+      <label style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;">
+        <span style="font-size: 15px;">Nome</span>
+        <input class="input" name="nome" type="text" autocomplete="name" placeholder="Como podemos te chamar" style="font-size: 16px; padding: 11px 14px;">
+      </label>
+      <label style="display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 15px;">WhatsApp</span>
+        <input class="input" name="telefone" type="tel" autocomplete="tel" placeholder="(51) 90000-0000" style="font-size: 16px; padding: 11px 14px;">
+      </label>
+      <label style="display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 15px;">Especialidade</span>
+        <select class="input" name="especialidade" style="font-size: 16px; padding: 11px 14px;">
+          {% for opcao in opcoes_especialidade %}
+            <option value="{{ opcao }}">{{ opcao }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      {# O período é um grupo de rádios porque são quatro opções curtas: o segmentado mostra todas de uma vez, e o `<legend>` dá o rótulo que o leitor de tela anuncia antes delas. #}
+      <fieldset style="grid-column: 1 / -1; margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px;">
+        <legend style="padding: 0; font-size: 15px;">Período de preferência</legend>
+        <div class="seg" style="width: fit-content; max-width: 100%;">
+          <label class="seg-opt" style="white-space: nowrap;"><input type="radio" name="periodo" value="Manhã" checked><span>Manhã</span></label>
+          <label class="seg-opt" style="white-space: nowrap;"><input type="radio" name="periodo" value="Tarde"><span>Tarde</span></label>
+          <label class="seg-opt" style="white-space: nowrap;"><input type="radio" name="periodo" value="Sábado"><span>Sábado</span></label>
+          <label class="seg-opt" style="white-space: nowrap;"><input type="radio" name="periodo" value="Tanto faz"><span>Tanto faz</span></label>
+        </div>
+      </fieldset>
+
+      <div style="grid-column: 1 / -1; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <button type="submit" class="btn btn-primary" style="font-size: 17px; padding: 12px 24px;">Quero ser chamado</button>
+      </div>
+      <p style="grid-column: 1 / -1; margin: 0; font-size: 13px; line-height: 24px; color: color-mix(in srgb, var(--color-text) 70%, transparent);">
+        Usamos seus dados apenas para retornar sobre esta consulta (LGPD). O registro entra no funil da recepção como lead novo.
+      </p>
+    </form>
+  </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,113 @@
+{% load static %}
+{% comment %}
+  Assistente flutuante do site público — [S4-15].
+
+  O botão-pílula fica fixo no canto e abre um painel que roda a MESMA conversa
+  da página `/chat/`: o `chat.js` se liga a qualquer `[data-chat]`, e o POST cai
+  em `chatbot:mensagem`, que devolve `_turno.html`. Nenhuma lógica de streaming
+  é duplicada aqui.
+
+  Abrir e fechar é o único JavaScript próprio deste componente — umas poucas
+  linhas no fim do arquivo. Ficou fora do `chat.js` de propósito: aquele é sobre
+  a conversa e é reutilizado pela página, que não tem painel para alternar.
+
+  Sem `data-autofocus` na raiz: focar o campo na carga roubaria o foco e faria a
+  landing rolar sozinha até o rodapé. O foco vai para o campo quando o painel
+  abre, no script abaixo.
+{% endcomment %}
+
+<div class="chat-flutuante">
+
+  <div id="painel-chat"
+       class="chat-flutuante-painel"
+       hidden
+       role="dialog"
+       aria-modal="false"
+       aria-label="Assistente da clínica"
+       data-chat
+       data-url-mensagem="{% url 'chatbot:mensagem' %}">
+
+    <div class="chat-flutuante-topo">
+      <div>
+        <p style="margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: 19px;">Assistente da clínica</p>
+        <p style="margin: 2px 0 0; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-neutral-400);">Convênio · preço · preparo · horários</p>
+      </div>
+      <button type="button" data-fechar-chat aria-label="Fechar o assistente" class="chat-flutuante-fechar">&times;</button>
+    </div>
+
+    <div data-conversa class="chat-flutuante-conversa">
+      <div style="align-self: flex-start; max-width: 88%; background: var(--color-neutral-100); box-shadow: var(--shadow-sm); border-radius: var(--radius-md); padding: 10px 14px; font-size: 15.5px; line-height: 24px;">
+        Olá! Pergunte sobre convênio, valores, preparo de exame — ou peça um horário.
+      </div>
+    </div>
+
+    <div class="chat-flutuante-base">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        {% for sugestao in chat_sugestoes %}
+          <button type="button" class="tag tag-outline" style="cursor: pointer; font-size: 13px;" data-sugestao="{{ sugestao }}">{{ sugestao }}</button>
+        {% endfor %}
+      </div>
+      <form data-formulario style="display: flex; gap: 10px;" autocomplete="off">
+        {% csrf_token %}
+        <input data-campo
+               class="input"
+               type="text"
+               maxlength="500"
+               required
+               placeholder="Escreva sua pergunta…"
+               aria-label="Sua pergunta"
+               style="flex: 1 1 0%; font-size: 15.5px; padding: 10px 14px;">
+        <button data-enviar type="submit" class="btn btn-primary">Enviar</button>
+      </form>
+    </div>
+  </div>
+
+  <button type="button" data-alternar-chat aria-expanded="false" aria-controls="painel-chat" class="chat-flutuante-botao">
+    <svg width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+      <path d="M128 24a104 104 0 0 0-91.4 153.6l-11.9 35.6a16 16 0 0 0 20.2 20.2l35.6-11.9A104 104 0 1 0 128 24Zm0 192a87.5 87.5 0 0 1-44.3-12 8 8 0 0 0-6.5-.7l-36.4 12.2 12.2-36.4a8 8 0 0 0-.7-6.5A88 88 0 1 1 128 216Z" opacity="0.35"></path>
+      <path d="M92 116a12 12 0 1 1-12-12 12 12 0 0 1 12 12Zm48-12a12 12 0 1 0 12 12 12 12 0 0 0-12-12Zm48 0a12 12 0 1 0 12 12 12 12 0 0 0-12-12Z"></path>
+    </svg>
+    <span data-rotulo-chat>Dúvidas?</span>
+  </button>
+</div>
+
+<script src="{% static 'chatbot/chat.js' %}" defer></script>
+<script>
+(() => {
+  "use strict";
+  const painel = document.getElementById("painel-chat");
+  const botao = document.querySelector("[data-alternar-chat]");
+  const rotulo = document.querySelector("[data-rotulo-chat]");
+  if (!painel || !botao || !rotulo) return;
+
+  const campo = painel.querySelector("[data-campo]");
+
+  const alternar = (abrir) => {
+    painel.hidden = !abrir;
+    botao.setAttribute("aria-expanded", String(abrir));
+    rotulo.textContent = abrir ? "Fechar" : "Dúvidas?";
+    if (abrir && campo) campo.focus();
+  };
+
+  botao.addEventListener("click", () => alternar(painel.hidden));
+  painel.querySelector("[data-fechar-chat]").addEventListener("click", () => {
+    alternar(false);
+    botao.focus();
+  });
+
+  // Qualquer "pergunte aqui mesmo" espalhado pela página abre o painel.
+  document.querySelectorAll("[data-abrir-chat]").forEach((gatilho) => {
+    gatilho.addEventListener("click", (e) => {
+      e.preventDefault();
+      alternar(true);
+    });
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !painel.hidden) {
+      alternar(false);
+      botao.focus();
+    }
+  });
+})();
+</script>
