@@ -24,23 +24,34 @@ não pode aparecer em ``WHERE``/``ORDER BY``. É o caso de ``Evolucao.texto``.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import admin
 from django.db.models import Count, QuerySet
 from django.http import HttpRequest
 
+from apps.agenda.models import Consulta
+from apps.core.admin import RestritoAoMedicoMixin
+
 from .models import Evolucao, LogAcesso, Prontuario
+
+if TYPE_CHECKING:
+    from apps.crm.models import Medico
 
 
 @admin.register(Prontuario)
-class ProntuarioAdmin(admin.ModelAdmin):
+class ProntuarioAdmin(RestritoAoMedicoMixin, admin.ModelAdmin):
     """Agregador clínico — uma linha por paciente.
 
     ``autocomplete_fields`` no paciente não é só conforto: o ``<select>``
     padrão renderizaria a base inteira de pacientes numa página, e o rótulo de
     cada opção sai do ``__str__``, o que na prática publicaria a lista completa
     de nomes atendidos pela clínica em qualquer tela de criação.
+
+    O recorte por perfil `[S2-10]` é o mais consequente dos três: prontuário é
+    dado clínico, e "médico vê só os seus" aqui é a regra que a LGPD e o
+    sigilo profissional cobram. Ver
+    :class:`~apps.core.admin.RestritoAoMedicoMixin`.
     """
 
     list_display = ("paciente", "total_evolucoes", "criado_em")
@@ -52,8 +63,31 @@ class ProntuarioAdmin(admin.ModelAdmin):
     readonly_fields = ("criado_em",)
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Prontuario]:
-        """Anota a contagem de evoluções — evita um ``COUNT`` por linha da listagem."""
+        """Anota a contagem de evoluções — evita um ``COUNT`` por linha da listagem.
+
+        O ``super()`` é o do mixin (ver a ordem de bases da classe), então a
+        anotação se aplica **sobre** o queryset já recortado por perfil. Inverter
+        a ordem das bases faria a anotação vir de um queryset irrestrito.
+        """
         return super().get_queryset(request).annotate(_total_evolucoes=Count("evolucoes"))
+
+    def restringir_ao_medico(
+        self, queryset: QuerySet[Prontuario], medico: Medico
+    ) -> QuerySet[Prontuario]:
+        """Prontuários dos pacientes que têm consulta com este médico.
+
+        O recorte é por **paciente**, e não por autoria de evolução
+        (``evolucoes__medico``): um médico que vai atender amanhã precisa ler o
+        histórico de antes de existir registro dele ali. Autoria responde outra
+        pergunta — "o que eu escrevi" —, que o filtro por médico de
+        ``EvolucaoAdmin`` já cobre.
+
+        Mesma subquery de ``PacienteAdmin.restringir_ao_medico``, pelo mesmo
+        motivo: evita o ``DISTINCT`` que o join traria.
+        """
+        return queryset.filter(
+            paciente_id__in=Consulta.objects.filter(medico=medico).values("paciente_id")
+        )
 
     @admin.display(description="evoluções", ordering="_total_evolucoes")
     def total_evolucoes(self, obj: Prontuario) -> int:

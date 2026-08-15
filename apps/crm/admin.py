@@ -24,6 +24,8 @@ from django.core.exceptions import ValidationError
 from django.db.models import Count, QuerySet
 from django.http import HttpRequest
 
+from apps.agenda.models import Consulta
+from apps.core.admin import RestritoAoMedicoMixin
 from apps.core.security.hash import normalize_cpf, validar_cpf
 
 from .models import Especialidade, Lead, Medico, MedicoEspecialidade, Paciente
@@ -70,14 +72,41 @@ class EspecialidadeAdmin(admin.ModelAdmin):
 @admin.register(Medico)
 class MedicoAdmin(admin.ModelAdmin):
     """Corpo clínico. ``search_fields`` é pré-requisito do ``autocomplete_fields``
-    usado pelo admin da agenda."""
+    usado pelo admin da agenda.
 
-    list_display = ("nome", "crm_completo", "rqe", "ativo", "criado_em")
+    ``usuario`` é o vínculo de que a permissão por perfil `[S2-10]` depende:
+    preenchê-lo é o que faz o médico enxergar apenas os próprios pacientes,
+    consultas e prontuários. Entra por ``raw_id_fields``, e não por
+    ``autocomplete_fields``: o autocomplete exigiria ``search_fields`` em
+    ``UsuarioAdmin`` **e** publicaria, na busca, a lista de logins da clínica
+    para qualquer um com acesso a esta tela. O ``raw_id`` abre a listagem de
+    usuários em popup, que já respeita as permissões do próprio
+    ``UsuarioAdmin``.
+    """
+
+    list_display = ("nome", "crm_completo", "rqe", "usuario", "ativo", "criado_em")
     list_filter = ("ativo", "crm_uf", "especialidades")
     search_fields = ("nome", "crm_numero", "rqe")
+    list_select_related = ("usuario",)  # a coluna ``usuario`` lê o ``__str__`` dele
+    raw_id_fields = ("usuario",)
     ordering = ("nome",)
     readonly_fields = ("criado_em",)
     inlines = (MedicoEspecialidadeInline,)
+    fieldsets = (
+        (None, {"fields": ("nome", "crm_numero", "crm_uf", "rqe", "ativo")}),
+        (
+            "Acesso ao painel",
+            {
+                "fields": ("usuario",),
+                "description": (
+                    "Vincule o login deste médico para que ele veja apenas os próprios "
+                    "pacientes, consultas e prontuários. Sem vínculo, um usuário de perfil "
+                    "“Médico” não enxerga nada — o padrão é o fechado."
+                ),
+            },
+        ),
+        ("Auditoria", {"fields": ("criado_em",), "classes": ("collapse",)}),
+    )
 
     @admin.display(description="CRM", ordering="crm_numero")
     def crm_completo(self, obj: Medico) -> str:
@@ -198,10 +227,10 @@ class PacienteAdminForm(forms.ModelForm):
 
 
 @admin.register(Paciente)
-class PacienteAdmin(admin.ModelAdmin):
+class PacienteAdmin(RestritoAoMedicoMixin, admin.ModelAdmin):
     """Cadastro de pacientes `[S2-9]` — titular de dado pessoal sensível (LGPD).
 
-    Duas regras atravessam toda a configuração desta classe:
+    Três regras atravessam toda a configuração desta classe:
 
     1. **O CPF em claro não aparece em listagem.** A coluna mostra
        ``cpf_mascarado``; os 11 dígitos só existem na tela de detalhe, e ainda
@@ -209,6 +238,15 @@ class PacienteAdmin(admin.ModelAdmin):
     2. **Nada de ``cpf_cifrado``/``cpf_hash`` editáveis.** Eles ficam fora dos
        fieldsets *e* em ``readonly_fields`` — o segundo cinto existe para o dia
        em que alguém acrescentar a coluna a um fieldset sem ler esta docstring.
+    3. **Médico vê só os pacientes dele** `[S2-10]`, via
+       :class:`~apps.core.admin.RestritoAoMedicoMixin`.
+
+    A restrição atinge, de graça, um caminho que passa despercebido: o
+    ``autocomplete`` de paciente usado por ``ConsultaAdmin`` e
+    ``ProntuarioAdmin`` responde a partir deste ``get_queryset``. Sem o mixin,
+    um médico digitando três letras na tela de consulta receberia nomes de
+    pacientes que não são dele — vazamento por caminho lateral, com o
+    ``changelist`` aparentemente protegido.
     """
 
     form = PacienteAdminForm
@@ -235,6 +273,23 @@ class PacienteAdmin(admin.ModelAdmin):
         ),
         ("Auditoria", {"fields": ("criado_em", "atualizado_em"), "classes": ("collapse",)}),
     )
+
+    def restringir_ao_medico(
+        self, queryset: QuerySet[Paciente], medico: Medico
+    ) -> QuerySet[Paciente]:
+        """Pacientes com ao menos uma consulta com este médico.
+
+        Subquery (``pk__in``) em vez de ``filter(consultas__medico=...)``: o
+        join traria o paciente uma vez por consulta e obrigaria a um
+        ``.distinct()``, que num changelist paginado é ``SELECT DISTINCT`` sobre
+        todas as colunas da tela. A subquery devolve cada paciente uma vez, sem
+        alterar as colunas do ``SELECT`` externo.
+
+        Não há filtro por ``status``: uma consulta cancelada ou uma falta
+        também são atendimento desse médico, e o histórico é o que ele precisa
+        enxergar.
+        """
+        return queryset.filter(pk__in=Consulta.objects.filter(medico=medico).values("paciente_id"))
 
     @admin.display(description="CPF")
     def cpf_mascarado(self, obj: Paciente) -> str:

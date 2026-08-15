@@ -14,12 +14,15 @@ a docstring da classe.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.contrib import admin, messages
+from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.utils import timezone
+
+from apps.core.admin import RestritoAoMedicoMixin
 
 from .models import AgendaRegra, AgendaSlot, Consulta
 from .services.agendamento import (
@@ -28,6 +31,9 @@ from .services.agendamento import (
     AgendamentoService,
     SlotIndisponivelError,
 )
+
+if TYPE_CHECKING:
+    from apps.crm.models import Medico
 
 
 @admin.register(AgendaRegra)
@@ -156,7 +162,7 @@ class ConsultaAdminForm(forms.ModelForm):
 
 
 @admin.register(Consulta)
-class ConsultaAdmin(admin.ModelAdmin):
+class ConsultaAdmin(RestritoAoMedicoMixin, admin.ModelAdmin):
     """Consultas marcadas `[S3-10]`.
 
     ``list_select_related`` não é otimização opcional aqui: o ``__str__`` da
@@ -182,6 +188,11 @@ class ConsultaAdmin(admin.ModelAdmin):
     A **edição** não passa pelo service, e não deve: mudar status ou observação
     de uma consulta existente não toca em disponibilidade, e ``agendar()`` só
     sabe criar.
+
+    Restrição por perfil `[S2-10]`
+    ------------------------------
+    Via :class:`~apps.core.admin.RestritoAoMedicoMixin`: médico vê só as
+    consultas em que ``slot.medico`` é ele.
     """
 
     form = ConsultaAdminForm
@@ -206,6 +217,11 @@ class ConsultaAdmin(admin.ModelAdmin):
         ("Atendimento", {"fields": ("status", "origem", "observacoes")}),
         ("Auditoria", {"fields": ("criado_em", "atualizado_em"), "classes": ("collapse",)}),
     )
+
+    def restringir_ao_medico(self, queryset: QuerySet, medico: Medico) -> QuerySet:
+        """As consultas dele. Filtro direto — ``Consulta.medico`` é justamente a
+        desnormalização de ``slot.medico`` que existe para esta leitura."""
+        return queryset.filter(medico=medico)
 
     def get_readonly_fields(self, request: HttpRequest, obj: Any = None) -> tuple[str, ...]:
         """Na criação, ``status`` e ``origem`` também são somente-leitura.
