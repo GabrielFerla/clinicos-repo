@@ -1,4 +1,4 @@
-.PHONY: setup up down logs app worker shell test test-oracle test-llm lint fmt hooks-install \
+.PHONY: setup up down logs app worker shell test test-ci test-oracle test-llm lint fmt hooks-install \
         migrate makemigrations seed tailwind-install tailwind-dev tailwind-build
 
 # Não há Python no host — tudo roda dentro do container `django`.
@@ -28,6 +28,13 @@ seed:              ; $(DC) run --rm django python manage.py seed_initial
 
 # Suíte padrão: SQLite em memória, sem serviço externo. É o que o CI roda.
 test:              ; $(RUN_TEST) pytest -q
+
+# A suíte como o CI a enxerga: **sem `.env`**. Não é redundante com `test`.
+# `config/settings/base.py` faz `read_env(BASE_DIR/".env")`, e o `.env` montado
+# no container alimenta as settings — então `make test` pode ficar verde com
+# variável que o CI não tem. Foi assim que 49 falhas e 104 erros passaram
+# despercebidos até chegarem na `main`. Rode antes de abrir PR.
+test-ci:           ; $(RUN_TEST) sh -c "cp -a /app /tmp/repo && rm -f /tmp/repo/.env && cd /tmp/repo && pytest -q"
 
 # Testes que exigem serviço externo. Auto-pulados por padrão (ver conftest.py);
 # as variáveis abaixo os habilitam.
