@@ -2,7 +2,7 @@
 
 **Duração:** 2 semanas
 **Período:** Semanas 2-3
-**Status:** ☐ Pendente
+**Status:** 🔄 Em andamento — 20/26 · trilha técnica concluída, faltam design (S1-18 a S1-20), cliente (S1-21, S1-22) e processo (S1-23)
 **Pré-requisito:** Sprint 0 concluída com sucesso
 
 ## Meta
@@ -25,19 +25,19 @@
 - [x] **S1-7** Configurar variáveis de ambiente via `django-environ` · **BACK** · 1h
 
 ### Modelagem completa
-- [ ] **S1-8** Modelagem das entidades em Django models · **BACK+DB** · 8h
-  - [ ] Especialidade
-  - [ ] Medico, MedicoEspecialidade
-  - [ ] Paciente
-  - [ ] AgendaRegra, AgendaSlot
-  - [ ] Consulta
-  - [ ] Prontuario, Evolucao
-  - [ ] Lead, InteracaoChat
-  - [ ] FaqVector
-  - [ ] Usuario (User custom)
-  - [ ] LogAcesso
+- [x] **S1-8** Modelagem das entidades em Django models · **BACK+DB** · 8h
+  - [x] Especialidade
+  - [x] Medico, MedicoEspecialidade
+  - [x] Paciente
+  - [x] AgendaRegra, AgendaSlot
+  - [x] Consulta
+  - [x] Prontuario, Evolucao
+  - [x] Lead, InteracaoChat
+  - [x] FaqVector
+  - [x] Usuario (User custom)
+  - [x] LogAcesso
 - [x] **S1-9** Migrations Oracle de todas as tabelas base, com índices · **DB** · 5h
-- [ ] **S1-10** Trigger PL/SQL de imutabilidade em `EVOLUCAO` via RunPython · **DB** · 3h
+- [x] **S1-10** Trigger PL/SQL de imutabilidade em `EVOLUCAO` via RunPython · **DB** · 3h
 - [x] **S1-11** Constraint UNIQUE de slot + script de teste · **DB** · 2h
 - [x] **S1-12** Criação do índice HNSW em `FAQ_VECTOR.EMBEDDING` · **DB** · 1h
 
@@ -45,7 +45,7 @@
 - [x] **S1-13** Helper de criptografia AES-256 para CPF · **BACK** · 3h
 - [x] **S1-14** Helper de hash determinístico HMAC-SHA256 com pepper · **BACK** · 2h
 - [x] **S1-15** Testes unitários dos helpers de cripto · **BACK+QA** · 3h
-- [ ] **S1-16** Seeders com dados realistas de clínica oftalmológica · **DB** · 4h
+- [x] **S1-16** Seeders com dados realistas de clínica oftalmológica · **DB** · 4h
   - 5 médicos com diferentes subespecialidades
   - 50 pacientes
   - 200 slots futuros
@@ -72,9 +72,9 @@
 ## Definition of Done
 
 - [ ] `docker compose up` sobe a stack inteira em qualquer máquina Windows/WSL ou macOS
-- [ ] `python manage.py migrate` aplica todas as migrations sem erros no Oracle 23ai
-- [ ] Trigger de imutabilidade testado: `UPDATE` em `EVOLUCAO` lança exceção
-- [ ] Helpers de CPF passam em testes unitários (criptografar/descriptografar/hash)
+- [x] `python manage.py migrate` aplica todas as migrations sem erros no Oracle 23ai
+- [x] Trigger de imutabilidade testado: `UPDATE` em `EVOLUCAO` lança exceção
+- [x] Helpers de CPF passam em testes unitários (criptografar/descriptografar/hash)
 - [ ] Pipeline de CI verde no GitHub
 - [ ] Lista de escopo fora-do-MVP1 assinada (física ou digital) pelo cliente piloto
 - [ ] Issues no GitHub criadas para Sprints 1-6 com labels apropriadas
