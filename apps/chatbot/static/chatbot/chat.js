@@ -53,6 +53,9 @@
     const entradaCsrf = formulario.querySelector("[name=csrfmiddlewaretoken]");
     const csrf = entradaCsrf ? entradaCsrf.value : "";
 
+    // Opcional: o bloco de perguntas prontas, quando o consumidor tiver um.
+    const sugestoes = raiz.querySelector("[data-sugestoes]");
+
     const rolar = () => {
       conversa.scrollTop = conversa.scrollHeight;
     };
@@ -79,6 +82,12 @@
 
       travar(true);
       campo.value = "";
+
+      // As sugestões servem a quem não sabe por onde começar. Iniciada a
+      // conversa elas já cumpriram o papel: saem para não competir com a
+      // resposta nem roubar a altura que a conversa passa a precisar. Uma vez
+      // fora, não voltam — reaparecer a cada turno seria um salto no layout.
+      if (sugestoes) sugestoes.hidden = true;
 
       let bloco;
       try {

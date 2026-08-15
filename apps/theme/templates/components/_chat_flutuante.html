@@ -42,7 +42,14 @@
     </div>
 
     <div class="chat-flutuante-base">
-      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+      {% comment %}
+        As sugestões existem para quem não sabe o que perguntar. Assim que a
+        conversa começa elas já cumpriram o papel, e o `chat.js` as remove — daí
+        o `data-sugestoes` no container. Mantê-las competiria por atenção com a
+        resposta e roubaria altura da conversa justamente quando ela passa a
+        valer alguma coisa.
+      {% endcomment %}
+      <div data-sugestoes style="display: flex; flex-wrap: wrap; gap: 8px;">
         {% for sugestao in chat_sugestoes %}
           <button type="button" class="tag tag-outline" style="cursor: pointer; font-size: 13px;" data-sugestao="{{ sugestao }}">{{ sugestao }}</button>
         {% endfor %}
