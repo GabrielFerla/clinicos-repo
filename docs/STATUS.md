@@ -18,7 +18,7 @@
 - **A trilha técnica da Sprint 1 segue encerrada.** Restam design (S1-18 a S1-20), cliente (S1-21, S1-22) e processo (S1-23) — nada disso é código.
 - **Sprint 0** 26/27 · **Sprint 1** 20/26 · **Sprint 2** 6/20 · **Sprint 3** 4/17 · **Sprint 5** 16/33.
 - **`make setup`, `make test`, `make seed`, `make worker` e `make app` funcionam.** Os débitos #1, #2, #3, #6, #7, #11 e #12 estão resolvidos.
-- **O que falta para o chat estar completo:** a conversa inteira conduzida pelo `qwen2.5:3b` ainda não foi validada à mão — a tool está provada, o diálogo que a aciona não.
+- **Verificado com LLM real, não só em teste.** Uma conversa de 4 turnos com `qwen2.5:14b` levou do "queria marcar retina" até a consulta gravada. Fecha o DoD "paciente fictício agenda sem intervenção humana" da S5 — e revelou o débito #16, que os testes unitários não pegariam.
 
 ---
 
@@ -45,10 +45,10 @@ Duas ficaram **deliberadamente abertas por serem parciais**, para não inflar o 
 migration) e **S3-10** (o Admin da agenda existe; faltam os "componentes visuais").
 O detalhe está nas Notas de cada sprint.
 
-**Definition of Done: 9 de 52 itens marcados** (eram 3). Os 6 novos: CPF cifrado
+**Definition of Done: 10 de 52 itens marcados** (eram 3). Os 7 novos: CPF cifrado
 verificado no banco, busca por hash, médico restrito aos seus pacientes e bloqueio de
 acesso alheio (S2); corrida no mesmo slot com um só vencedor (S3); funil com leads em
-etapas distintas (S5).
+etapas distintas e paciente agendando sem intervenção humana (S5).
 
 ---
 
@@ -173,6 +173,7 @@ Todos verificados nesta revisão, com evidência no código.
 | 13 | **Aberto.** `bulk_create(ignore_conflicts=True)` não existe no Oracle | O backend do Django declara `supports_ignore_conflicts = False`; a flag levanta `NotSupportedError` | Pegadinha que deixa a suíte **verde no SQLite com o código quebrado em produção**. O `gerar_slots` já condiciona a flag a `connection.features` e cai para savepoint linha a linha no Oracle. Fica registrado porque a S3-4 (Celery Beat) reusa esse caminho |
 | 14 | **Aberto.** Chat escreve no banco sem nenhum anti-abuso | Não há rate limit (S5-18), honeypot (S5-19) nem bloqueio por palavra-chave (S5-21) | Mudou de peso em 14/08: enquanto as tools eram só de leitura, abuso custava CPU. Agora um script consegue **criar paciente e ocupar agenda em massa** por `/chat/` |
 | 15 | **Aberto.** Quem agenda pelo chat não recebe confirmação | Nenhum e-mail implementado (S3-16/17, S5-29/30); Mailhog no ar sem remetente | O paciente fecha o agendamento e sai sem comprovante. É o buraco mais visível para o cliente piloto |
+| 16 | **Aberto.** `detectar_alucinacao` acusa falso positivo em toda confirmação | [`services/chat.py:76`](../apps/chatbot/services/chat.py) compara a resposta com `resultados_tools` **do turno atual**; o turno de confirmação repete horário e médico vindos do `buscar_slots` do turno anterior | Regressão introduzida pela fatia de 14/08, que passou a pedir confirmação antes de escrever. Grava `alucinacao_detectada=True` em turno legítimo e **contamina justamente o sinal de auditoria** de que a S5-32 e o risco R4 dependem. A checagem é por turno; os fatos da conversa não são |
 
 ---
 
@@ -217,7 +218,7 @@ ORM direto · S1-10 é validada no DoD da S6.
 Melhorou parcialmente em 14/08:
 
 - ✅ Os cabeçalhos das sprints **1, 2, 3 e 5** e a tabela de [`sprints/README.md`](../sprints/README.md) refletem o progresso real.
-- ✅ **9/52 itens de Definition of Done** marcados (eram 3).
+- ✅ **10/52 itens de Definition of Done** marcados (eram 3).
 - ✅ **Tarefa parcial não vira checkbox marcado.** S2-9 e S3-10 seguem `[ ]` com o que falta descrito nas Notas da sprint — o placar acima conta checkbox, então marcar parcial corromperia o número.
 - ⚠️ Os arquivos das sprints **4 e 6** ainda têm `**Status:** ☐ Pendente` — corretíssimo, estão em 0%.
 - ⚠️ A tabela **Cronograma** do [`README.md`](../README.md) segue listando as 7 sprints como pendentes.
