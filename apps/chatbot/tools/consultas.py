@@ -1,9 +1,10 @@
 """Ferramentas de leitura do chatbot.
 
-Todas consultam o banco e **nenhuma escreve**. Criar lead ou consulta fica
-para uma entrega posterior (S5-12) — o que reduz bastante a superfície de risco
-desta primeira versão: um erro de interpretação do modelo custa uma resposta
-ruim, nunca um agendamento fantasma.
+Todas consultam o banco e **nenhuma escreve** — a invariante é do módulo, não
+uma coincidência: um erro de interpretação do modelo aqui custa uma resposta
+ruim, nunca um agendamento fantasma. A única ferramenta que grava mora separada,
+em ``agendamento.py`` `[S5-12]`, justamente para que essa diferença de risco
+apareça no ``ls``.
 """
 
 from __future__ import annotations
@@ -215,20 +216,8 @@ class BuscarFaqTool(BaseTool):
         }
 
 
-def construir_registry():
-    """Monta o registry do turno com as três ferramentas de leitura.
-
-    Import tardio para evitar ciclo: ``tools`` importa models, e o registry é
-    consumido pelo ``ChatService``.
-    """
-    from .base import ToolRegistry
-
-    return ToolRegistry([ListarEspecialidadesTool(), BuscarSlotsTool(), BuscarFaqTool()])
-
-
 __all__ = [
     "BuscarFaqTool",
     "BuscarSlotsTool",
     "ListarEspecialidadesTool",
-    "construir_registry",
 ]
