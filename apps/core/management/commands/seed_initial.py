@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import random
 import unicodedata
 import uuid
@@ -43,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -60,6 +62,17 @@ SEMENTE = 20260101
 
 # Namespace dos UUIDs determinísticos de conversa dos leads (ver ``_conversa_id``).
 NAMESPACE_SEED = uuid.uuid5(uuid.NAMESPACE_DNS, "seed.clinicos.local")
+
+# Superusuário de desenvolvimento. Os nomes das variáveis de ambiente são os
+# mesmos do ``createsuperuser`` do Django de propósito — quem já conhece a
+# convenção não precisa aprender outra.
+#
+# `admin`/`admin` era o que o passo 6 do ``infra/scripts/setup.sh`` criava, e é
+# o que ``docs/SETUP.md`` documenta desde a S1-3; a credencial fica como estava
+# para não invalidar a documentação. O que mudou é que agora **só** nasce com
+# ``DEBUG=True`` — ver ``_criar_superusuario``.
+SUPERUSUARIO_PADRAO = "admin"
+SENHA_DEV_PADRAO = "admin"  # noqa: S105 — credencial de dev, barrada fora de DEBUG
 
 ESPECIALIDADES: list[tuple[str, str, str]] = [
     ("Oftalmologia Geral", "oftalmologia-geral", "Consulta completa, refração e triagem."),
@@ -300,6 +313,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         rng = random.Random(SEMENTE)  # noqa: S311 — dado de demonstração, não cripto
 
+        superusuario = self._criar_superusuario()
         especialidades = self._criar_especialidades()
         medicos = self._criar_medicos(especialidades)
         regras_por_medico, regras = self._criar_regras(medicos)
@@ -323,9 +337,63 @@ class Command(BaseCommand):
             f"{prontuarios} prontuários e {evolucoes} evoluções. "
             f"{vinculados} slots vinculados a uma regra."
         )
+        if superusuario:
+            self.stdout.write(f"Acesse /admin/ com o usuário `{superusuario}`.")
         self.stdout.write(
             "Próximo passo: `python manage.py reindexar_faq` para gerar os embeddings."
         )
+
+    def _criar_superusuario(self) -> str | None:
+        """Cria o superusuário de desenvolvimento, se for seguro criá-lo.
+
+        Sem isto não há como abrir o ``/admin/``, e o Admin é a UI do CRM no
+        MVP1 (ADR-0005): os 50 pacientes semeados existiriam sem que ninguém
+        conseguisse vê-los.
+
+        A senha sai de ``DJANGO_SUPERUSER_PASSWORD``. Sem ela, só há criação com
+        ``DEBUG=True`` — um superusuário de senha publicada em documentação não
+        pode nascer em produção porque alguém rodou ``make seed`` no servidor
+        errado.
+
+        Idempotente como o resto do comando: se o usuário já existe, nada é
+        tocado. Em especial a **senha não é redefinida** — quem trocou a dele
+        não a perde na próxima execução.
+
+        Returns:
+            O ``username`` criado ou já existente, ou ``None`` se a criação foi
+            pulada por falta de senha fora de ``DEBUG``.
+        """
+        Usuario = get_user_model()
+        username = os.environ.get("DJANGO_SUPERUSER_USERNAME", SUPERUSUARIO_PADRAO)
+        email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "admin@clinicos.local")
+        senha = os.environ.get("DJANGO_SUPERUSER_PASSWORD")
+
+        if not senha:
+            if not settings.DEBUG:
+                self.stdout.write(
+                    self.style.WARNING(
+                        "Superusuário não criado: defina DJANGO_SUPERUSER_PASSWORD. "
+                        "A senha padrão só vale com DEBUG=True."
+                    )
+                )
+                return None
+            senha = SENHA_DEV_PADRAO
+
+        usuario, criado = Usuario.objects.get_or_create(
+            username=username,
+            defaults={
+                "email": email,
+                "perfil": Usuario.Perfil.ADMIN,
+                "is_staff": True,
+                "is_superuser": True,
+            },
+        )
+        if criado:
+            # `set_password` fora do `defaults` porque ele precisa do hash, e
+            # `get_or_create` gravaria a senha em claro na coluna.
+            usuario.set_password(senha)
+            usuario.save(update_fields=["password"])
+        return username
 
     def _criar_especialidades(self) -> dict[str, Especialidade]:
         criadas: dict[str, Especialidade] = {}
