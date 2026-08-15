@@ -2,7 +2,7 @@
 
 **Duração:** 2 semanas
 **Período:** Semanas 10-11
-**Status:** ☐ Pendente
+**Status:** 🔄 Em andamento — 16/33 · o chat agenda de verdade desde 14/08; faltam anti-abuso, notificações e testes adversariais
 
 ## Meta
 
@@ -28,7 +28,7 @@
 - [x] **S5-9** Tool: `listar_especialidades_disponiveis()` · **AI** · 2h
 - [x] **S5-10** Tool: `buscar_slots(especialidade, periodo_preferido)` · **AI** · 4h
 - [ ] **S5-11** Tool: `triagem_oftalmologica(sintomas)` — sugere especialidade · **AI** · 5h
-- [ ] **S5-12** Tool: `criar_lead_e_consulta(dados_paciente, slot_id)` · **AI+BACK** · 6h
+- [x] **S5-12** Tool: `criar_lead_e_consulta(dados_paciente, slot_id)` · **AI+BACK** · 6h
 - [x] **S5-13** Tool: `buscar_faq(pergunta)` usando `VECTOR_DISTANCE` no Oracle · **AI+DB** · 5h
 - [ ] **S5-14** Tool: `cancelar_consulta_recente(email, telefone)` (limitado a 1h após criar) · **AI+BACK** · 4h
 
@@ -45,13 +45,13 @@
 
 ### CRM (funil de leads)
 - [ ] **S5-22** Model `Lead` com etapas: novo → qualificado → agendado → compareceu → retorno · **BACK** · 3h
-- [ ] **S5-23** Admin para visualizar funil e mover leads entre etapas · **BACK+FRONT** · 5h
-- [ ] **S5-24** Transição automática de Lead → Consulta quando chat agenda · **BACK** · 3h
+- [x] **S5-23** Admin para visualizar funil e mover leads entre etapas · **BACK+FRONT** · 5h
+- [x] **S5-24** Transição automática de Lead → Consulta quando chat agenda · **BACK** · 3h
 - [ ] **S5-25** Dashboard simples no Admin com contagem por etapa · **FRONT** · 4h
 
 ### Auditoria e custos
 - [x] **S5-26** Model `InteracaoChat` registrando cada turno + tokens + custo estimado · **BACK** · 3h
-- [ ] **S5-27** View de auditoria de conversas no Admin (somente leitura) · **FRONT+BACK** · 3h
+- [x] **S5-27** View de auditoria de conversas no Admin (somente leitura) · **FRONT+BACK** · 3h
 - [ ] **S5-28** Métrica custom: custo médio por agendamento · **BACK** · 2h
 
 ### Notificações
@@ -73,7 +73,7 @@
 - [ ] Custo médio por agendamento registrado e ≤ R$ 0,50 em tokens
 - [ ] FAQ Vector Search retorna respostas relevantes em ≤ 300ms
 - [ ] Médico abre painel e vê a consulta criada pelo chatbot com queixa pré-preenchida
-- [ ] Funil do CRM mostra leads em diferentes etapas
+- [x] Funil do CRM mostra leads em diferentes etapas
 - [ ] E-mail de confirmação chega corretamente formatado
 - [ ] Rate limit funciona: 100 tentativas seguidas do mesmo IP = bloqueio
 
@@ -93,7 +93,27 @@
 
 ## Notas
 
-_(adicionar durante a execução)_
+**14/08/2026 — fatia "mini CRM + chat que agenda".** O chat deixou de ser só de leitura.
+Ver `docs/STATUS.md` e `docs/CHAT_MVP.md`.
+
+- **A tool de escrita mora em `apps/chatbot/tools/agendamento.py`**, separada do
+  `consultas.py` — aquele módulo declara na primeira linha que nada ali escreve, e essa
+  invariante vale como documentação. O `construir_registry()` subiu para
+  `tools/__init__.py`, já que montar o conjunto deixou de ser assunto de um módulo só.
+- **`slot_id` só vem de um `buscar_slots` anterior.** A tool não aceita data/hora em
+  texto livre: é o mesmo princípio do `enum` de especialidades — restringir o vocabulário
+  no schema é a defesa que funciona num modelo pequeno, mais do que instrução no prompt.
+- **O `conversa_id` não passa pelo modelo.** Ele é injetado em `construir_registry()`
+  pela view, *depois* de o UUID já ter sido conferido contra a sessão. O modelo não tem
+  como forjar de qual conversa é o lead que está sendo fechado.
+- **Paciente é reaproveitado por `cpf_hash`**, nunca duplicado; e `SlotIndisponivelError`
+  vira mensagem verbalizável ("esse horário acabou de ser ocupado, quer ver outros?").
+- **O DoD "paciente fictício agenda sem intervenção humana" segue aberto de propósito.**
+  A tool está provada contra o Oracle real e com `FakeLLMClient`, mas a conversa completa
+  conduzida pelo `qwen2.5:3b` ainda não foi validada à mão. É a próxima verificação.
+- **Fora do escopo desta fatia:** S5-4/S5-5, S5-8, S5-11 (triagem), S5-14 (cancelamento),
+  S5-18 a S5-21 (anti-abuso), S5-25 (dashboard), S5-28 (custo), S5-29/S5-30 (e-mails),
+  S5-31 a S5-33 (E2E e adversariais).
 
 ---
 

@@ -2,22 +2,23 @@
 
 > Documento vivo, escrito para o time técnico. Snapshot do que **existe de fato no código** — não do que está planejado. Regenerar ao fim de cada sprint. Para o plano, ver [`PLANO.md`](PLANO.md); para o escopo, [`ESCOPO.md`](ESCOPO.md); para as tarefas, [`sprints/`](../sprints/).
 
-**Snapshot:** 14/08/2026 · branch `feature/s1-8-modelagem-completa` · última atividade de código: **14/08/2026**
+**Snapshot:** 14/08/2026 · branch `feature/mini-crm-chat-agendamento` · última atividade de código: **14/08/2026**
 
-> Revisão de 14/08: a S1-8 foi fechada — as 14 entidades da [`ARQUITETURA.md`](ARQUITETURA.md) existem no Oracle, com o trigger de imutabilidade (S1-10) e os seeders (S1-16). As seções marcadas com 🔄 foram atualizadas nesta rodada.
+> Revisão de 14/08 (segunda rodada do dia): entregue a fatia vertical **"mini CRM + chat que agenda"**, cortando as sprints 2, 3 e 5. O Admin passou a expor as 14 entidades e o chatbot deixou de ser só de leitura. As seções marcadas com 🔄 foram atualizadas nesta rodada.
 
 ---
 
 ## 1. TL;DR 🔄
 
-- **~32% do MVP1 concluído** — 58 de 182 tarefas (eram 55).
-- **A trilha técnica da Sprint 1 está encerrada.** Restam só design (S1-18 a S1-20), cliente (S1-21, S1-22) e processo (S1-23) — nada disso é código.
-- **O schema está completo.** 14 models, 12 migrations, aplicadas no Oracle 23ai real com rollback testado. `EVOLUCAO` é append-only por trigger PL/SQL, não por convenção.
-- **O chat funciona ponta a ponta.** Paciente pergunta em `/chat/`, o bot consulta Oracle 23ai (incluindo AI Vector Search) e responde em streaming. Guia completo em [`CHAT_MVP.md`](CHAT_MVP.md).
-- **Sprint 1 em 77%** — 20/26. **Sprint 0** segue 26/27 (falta só apresentar, S0-27). **Sprint 5** em 12/33.
-- **`make setup`, `make test`, `make seed`, `make worker` e `make app` funcionam.** Os débitos #1, #2, #3, #6, #7 e #11 estão resolvidos.
-- **O que a S1-8 destrava:** Sprint 2 inteira (CRUD de Paciente, permissões, audit log), Sprint 3 (`gerar_slots`, `AgendamentoService`) e o agendamento pelo chat (S5-12, S5-22, S5-24).
-- **O chat ainda não agenda** — as ferramentas seguem sendo só de leitura. Agora é falta de tool, não de tabela.
+- **~40% do MVP1 concluído** — 72 de 182 tarefas (eram 58).
+- **O chat agenda de verdade.** A tool `criar_lead_e_consulta` cria ou reaproveita o paciente pelo CPF, grava a `Consulta` via `AgendamentoService` e move o lead da conversa para `AGENDADO`. Verificado contra o Oracle real: 19/19 checagens ponta a ponta.
+- **O CRM é utilizável.** As 14 entidades têm tela no Admin, com filtro, busca e paginação. O débito #12 está resolvido.
+- **O anti-overbooking está provado, não só declarado.** `AgendamentoService.agendar` roda em `atomic()` + `select_for_update()`, e as duas constraints foram conferidas no `USER_CONSTRAINTS` do Oracle. O `ConsultaAdmin` também passa pelo service — senão a recepção deixaria o slot `LIVRE` e o chatbot seguiria oferecendo o horário.
+- **A agenda se abastece sozinha.** `gerar_slots --dias 60` expande as 28 regras semeadas em 2364 slots e é idempotente (segunda execução: 0 criados).
+- **A trilha técnica da Sprint 1 segue encerrada.** Restam design (S1-18 a S1-20), cliente (S1-21, S1-22) e processo (S1-23) — nada disso é código.
+- **Sprint 0** 26/27 · **Sprint 1** 20/26 · **Sprint 2** 6/20 · **Sprint 3** 4/17 · **Sprint 5** 16/33.
+- **`make setup`, `make test`, `make seed`, `make worker` e `make app` funcionam.** Os débitos #1, #2, #3, #6, #7, #11 e #12 estão resolvidos.
+- **O que falta para o chat estar completo:** a conversa inteira conduzida pelo `qwen2.5:3b` ainda não foi validada à mão — a tool está provada, o diálogo que a aciona não.
 
 ---
 
@@ -29,19 +30,25 @@ Contagem por ID de tarefa (`SX-Y`), direto dos checkboxes de `sprints/*.md`.
 |---|---:|---:|---:|---:|
 | S0 — Validação técnica | 27 | 26 | 1 | 🟢 96% |
 | S1 — Fundação | 26 | 20 | 6 | 🟢 77% |
-| S2 — CRM interno | 20 | 0 | 20 | ⚪ 0% |
-| S3 — Agenda | 17 | 0 | 17 | ⚪ 0% |
+| S2 — CRM interno | 20 | 6 | 14 | 🟡 30% |
+| S3 — Agenda | 17 | 4 | 13 | 🟡 24% |
 | S4 — Site público | 23 | 0 | 23 | ⚪ 0% |
-| S5 — Chatbot | 33 | 12 | 21 | 🟡 36% |
+| S5 — Chatbot | 33 | 16 | 17 | 🟡 48% |
 | S6 — Prontuário + hardening | 36 | 0 | 36 | ⚪ 0% |
-| **Total** | **182** | **58** | **124** | **32%** |
+| **Total** | **182** | **72** | **110** | **40%** |
 
-**S1-8, S1-10 e S1-16 fecharam em 14/08.** As 6 tarefas abertas da S1 não são de
-código: S1-18/19/20 (design), S1-21/22 (cliente) e S1-23 (issues no GitHub).
+**14 tarefas fecharam na fatia de 14/08**, atravessando três sprints: S2-3, S2-10,
+S2-13, S2-16, S2-17, S2-18 · S3-3, S3-6, S3-7, S3-8 · S5-12, S5-23, S5-24, S5-27.
 
-**Definition of Done: 3 de 52 itens marcados**, todos na S1 — migrate no Oracle
-sem erros, trigger de imutabilidade testado e helpers de CPF cobertos. Os demais
-seguem abertos, inclusive na S0 que está 96%.
+Duas ficaram **deliberadamente abertas por serem parciais**, para não inflar o placar:
+**S2-9** (o CRUD de paciente funciona; faltam só os campos oftalmológicos, que exigem
+migration) e **S3-10** (o Admin da agenda existe; faltam os "componentes visuais").
+O detalhe está nas Notas de cada sprint.
+
+**Definition of Done: 9 de 52 itens marcados** (eram 3). Os 6 novos: CPF cifrado
+verificado no banco, busca por hash, médico restrito aos seus pacientes e bloqueio de
+acesso alheio (S2); corrida no mesmo slot com um só vencedor (S3); funil com leads em
+etapas distintas (S5).
 
 ---
 
@@ -70,6 +77,35 @@ As três garantias que moram no banco, e não na aplicação:
 - **CPF nunca em claro** — `Paciente.definir_cpf()` cifra (AES-256-GCM) e
   hasheia (HMAC-SHA256 com pepper) numa operação só; `buscar_por_cpf()` acha sem
   descriptografar nada.
+
+**CRM operável no Admin (S2-9 parcial, S2-10, S2-13, S5-23, S5-27, S3-10 parcial)**
+
+As 14 entidades têm tela, com filtro, busca e paginação. O que não é CRUD trivial:
+
+- **`PacienteAdmin`** — o model não tem campo `cpf` em claro, então o form declara um
+  campo não-model: valida os dois dígitos verificadores (`validar_cpf`), recusa
+  duplicado consultando `cpf_hash` e grava por `definir_cpf()`. A listagem mostra
+  `***.***.789-09`; digitar os 11 dígitos na busca acha o paciente **sem descriptografar
+  nada**.
+- **Somente leitura de verdade** em `Evolucao`, `LogAcesso` e `InteracaoChat`: as três
+  permissões negadas mais `get_readonly_fields` cobrindo todo campo concreto. Em
+  `Evolucao` não é preferência de UX — `TRG_EVOLUCAO_IMUTAVEL` levanta `ORA-20001`, e
+  uma tela editável só produziria erro 500.
+- **Médico enxerga só o que é dele** — `get_queryset` recortado por perfil em consulta,
+  paciente e prontuário, apoiado no novo `Medico.usuario`. Médico sem vínculo vê lista
+  vazia, e não tudo.
+
+**Agendamento (S3-3, S3-6, S3-7, S3-8, S5-12, S5-24)**
+
+- **`AgendamentoService.agendar`** — `atomic()` + `select_for_update()`, recusa slot
+  ocupado ou no passado, deriva `medico` de `slot.medico` (é keyword-only e **não**
+  aceita médico), marca o slot `RESERVADO`. `IntegrityError` de corrida e slot já tomado
+  saem pela mesma `SlotIndisponivelError`, com mensagem exibível ao paciente.
+- **`gerar_slots --dias 60`** — expande as regras semanais respeitando duração,
+  intervalo e vigência. Idempotente.
+- **`criar_lead_e_consulta`** — a primeira tool de escrita do chatbot. `slot_id` só vem
+  de um `buscar_slots` anterior; o `conversa_id` é injetado pela view depois de
+  conferido contra a sessão, nunca pelo modelo.
 
 **Andaime do projeto (S1-1 a S1-7)**
 
@@ -103,12 +139,14 @@ desde 14/08:
 | **Banco físico** | ✅ Índice HNSW em `FAQ_VECTOR`, UNIQUE de slot e trigger `TRG_EVOLUCAO_IMUTAVEL` (ENABLED/VALID, verificado em `USER_TRIGGERS`). |
 | **Dados de demonstração** | ✅ 50 pacientes (CPF cifrado), 5 médicos, 28 regras, 600+ slots, 13 consultas, 13 leads, 4 prontuários, 20 FAQs. `make seed` é idempotente. |
 | **Rotas** | `/admin/` e `/chat/` existem. O site público (S4) não. |
-| **Views / telas** | Só o chat. CRM usa o Django Admin (ADR-0005); não há tela custom de agenda nem prontuário. **Os models novos não estão registrados no Admin** — é a S2-7 a S2-9. |
-| **Services** | Nenhum. `AgendamentoService` é a S3-7; a geração de slots a partir das regras é a S3-3. Os models estão prontos para ambos. |
-| **Celery** | Plugado, mas **sem nenhuma task**. O chat é síncrono. |
-| **Agendamento pelo chat** | As ferramentas seguem só de leitura. Agora é falta de tool (S5-12), não de tabela. |
-| **Auditoria LGPD** | Tabela `LOG_ACESSO` existe e está vazia de propósito. O middleware que a popula é da Sprint 6. |
-| **Testes de aplicação** | 412 em CI + 21 contra Oracle + 5 contra o Ollama. Cobrem cripto, models, constraints, trigger de imutabilidade, seeder, tools, SSE, guardrails e o loop de tool use. Não há teste E2E de browser. |
+| **Views / telas** | ✅ **As 14 entidades têm tela no Admin** (ADR-0005), com filtro, busca e paginação. Não há tela custom de agenda (calendário é S3-11) nem de prontuário. |
+| **Services** | ✅ `AgendamentoService` (S3-7) e o command `gerar_slots` (S3-3) existem. Falta o resto da S3: exceções, Celery Beat e as telas. |
+| **Celery** | Plugado, mas **sem nenhuma task**. O chat é síncrono, e o `gerar_slots` roda à mão — o job diário é a S3-4. |
+| **Agendamento pelo chat** | ✅ **Funciona.** `criar_lead_e_consulta` fecha o agendamento e move o lead para `AGENDADO`. Falta cancelar (S5-14) e triagem por sintoma (S5-11). |
+| **Auditoria LGPD** | Tabela `LOG_ACESSO` existe, tem tela somente-leitura e segue **vazia**: o middleware que a popula é da Sprint 6. Ter onde guardar não é ter auditoria. |
+| **Notificações** | Nenhuma. Quem agenda pelo chat **não recebe e-mail de confirmação** (S3-16/17, S5-29/30). O Mailhog está no ar sem ninguém mandar nada. |
+| **Anti-abuso no chat** | Nenhum. Sem rate limit (S5-18), honeypot (S5-19) nem bloqueio por palavra-chave (S5-21) — e agora a superfície é maior, porque o chat **escreve** no banco. |
+| **Testes de aplicação** | 591 em CI + 24 contra Oracle + 5 contra o Ollama. Cobrem cripto, models, constraints, trigger de imutabilidade, seeder, tools, SSE, guardrails, loop de tool use, os CRUDs do Admin, permissões por perfil, geração de slots e anti-overbooking. Não há teste E2E de browser. |
 
 ---
 
@@ -131,7 +169,10 @@ Todos verificados nesta revisão, com evidência no código.
 | 9 | `.claude/worktrees/` untracked + 13 branches `worktree-agent-*` locais | `.gitignore:110` ignora só `.claude/settings.local.json` | Ruído no `git status` e na lista de branches |
 | 10 | ✅ **Resolvido.** `main` local atrás do remoto | `git rev-list --left-right --count origin/main...main` → `0 0` | — |
 | 11 | ✅ **Resolvido.** `CPF_ENCRYPTION_KEY` do CI não era base64url válido | Removida de [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); o `conftest.py:36` já provê chave válida | Latente desde a S1-13: nada consumia a chave no import, então ninguém notou. Ao surgir o model `Paciente`, a coleta do pytest quebrava (3 failed, 13 errors). Como o `conftest.py` usa `setdefault`, o valor ruim do workflow **vencia** o bom |
-| 12 | **Aberto.** Models novos sem registro no Admin | `apps/crm/admin.py`, `apps/agenda/admin.py`, `apps/prontuario/admin.py` seguem vazios para as entidades novas | Os dados semeados existem mas não são visíveis pela UI. É exatamente o escopo da S2-7 a S2-9, então não é surpresa — só não confundir "tabela existe" com "dá para usar" |
+| 12 | ✅ **Resolvido.** Models novos sem registro no Admin | As 14 entidades registradas em `apps/{crm,agenda,prontuario,chatbot,core}/admin.py` | — |
+| 13 | **Aberto.** `bulk_create(ignore_conflicts=True)` não existe no Oracle | O backend do Django declara `supports_ignore_conflicts = False`; a flag levanta `NotSupportedError` | Pegadinha que deixa a suíte **verde no SQLite com o código quebrado em produção**. O `gerar_slots` já condiciona a flag a `connection.features` e cai para savepoint linha a linha no Oracle. Fica registrado porque a S3-4 (Celery Beat) reusa esse caminho |
+| 14 | **Aberto.** Chat escreve no banco sem nenhum anti-abuso | Não há rate limit (S5-18), honeypot (S5-19) nem bloqueio por palavra-chave (S5-21) | Mudou de peso em 14/08: enquanto as tools eram só de leitura, abuso custava CPU. Agora um script consegue **criar paciente e ocupar agenda em massa** por `/chat/` |
+| 15 | **Aberto.** Quem agenda pelo chat não recebe confirmação | Nenhum e-mail implementado (S3-16/17, S5-29/30); Mailhog no ar sem remetente | O paciente fecha o agendamento e sai sem comprovante. É o buraco mais visível para o cliente piloto |
 
 ---
 
@@ -145,23 +186,29 @@ sem depender umas das outras:
 - **Cliente** — S1-21 (kickoff, 2h) → S1-22 (assinatura da lista de fora-do-escopo, 1h)
 - **Processo** — S1-23 (criar issues no GitHub para as sprints 1-6, 3h), S0-27 (apresentar a spike, 1h)
 
-O gargalo mudou de lugar. Com o schema pronto, três frentes de código abrem ao
-mesmo tempo, e a escolha entre elas é de prioridade, não de dependência:
+**A cadeia do agendamento também acabou.** `gerar_slots` (S3-3) → `AgendamentoService`
+(S3-7) → `criar_lead_e_consulta` (S5-12) → funil (S5-24) está fechada e provada contra o
+Oracle. Não há mais uma raiz técnica bloqueando outras frentes.
+
+O gargalo agora é de **confiabilidade e de produto**, não de dependência:
 
 ```
-schema completo (S1-8/9/10/11/12/16)  ✅
-  ├── Sprint 2 — Admin sobre os models novos    (S2-7 a S2-9)  ← torna os dados usáveis
-  ├── Sprint 3 — gerar_slots (S3-3) → AgendamentoService (S3-7) → consultar_slots (S3-14)
-  └── Sprint 5 — criar_lead_e_consulta (S5-12) → funil (S5-22/23/24)
+fatia vertical operando (CRM + chat que agenda)  ✅
+  ├── Confirmação por e-mail   (S3-16/17, S5-29/30)  ← débito #15; o paciente sai sem comprovante
+  ├── Anti-abuso no chat       (S5-18/19/21)         ← débito #14; agora o chat escreve
+  ├── Job diário de slots      (S3-4)                ← a agenda seca em 60 dias sem isso
+  ├── Auditoria LGPD de fato   (middleware da S6)    ← risco R1; LOG_ACESSO segue vazio
+  └── Sprint 4 — site público                        ← nada dela existe, e é onde o chat mora
 ```
 
-**A S3-7 é a nova raiz do agendamento:** a S5-12 (agendar pelo chat) precisa
-dela, porque criar `Consulta` fora de transação serializável fura o
-anti-overbooking que o schema agora garante.
+**A ordem sugerida é essa mesma.** Os dois primeiros são os que separam "demo que
+funciona" de "sistema que um paciente real usa": sem e-mail o agendamento não tem
+comprovante, e sem rate limit um script ocupa a agenda inteira por `/chat/`.
 
-Dependências que atravessam sprints, para quem for planejar: S1-11 reaparece na
-S3-6 · S1-12 alimenta S5-13/S5-15 · S3-14 (`consultar_slots`) é consumida pela
-tool `buscar_slots` da S5-10 · S1-10 é validada no DoD da S6.
+Dependências que atravessam sprints, para quem for planejar: S1-12 alimenta
+S5-13/S5-15 · a S3-4 reusa o `gerar_slots` e herda o débito #13 · S3-14
+(`consultar_slots`) virou redundante na prática, já que a tool `buscar_slots` consulta o
+ORM direto · S1-10 é validada no DoD da S6.
 
 ---
 
@@ -169,9 +216,10 @@ tool `buscar_slots` da S5-10 · S1-10 é validada no DoD da S6.
 
 Melhorou parcialmente em 14/08:
 
-- ✅ O cabeçalho da **S1** e a tabela de status de [`sprints/README.md`](../sprints/README.md) refletem o progresso real das sprints 0, 1 e 5.
-- ✅ **3/52 itens de Definition of Done** marcados (eram 0), todos na S1.
-- ⚠️ Os arquivos das sprints **2, 3, 4 e 6** ainda têm `**Status:** ☐ Pendente` na linha 5 — mas essas estão de fato em 0%, então o rótulo está correto.
+- ✅ Os cabeçalhos das sprints **1, 2, 3 e 5** e a tabela de [`sprints/README.md`](../sprints/README.md) refletem o progresso real.
+- ✅ **9/52 itens de Definition of Done** marcados (eram 3).
+- ✅ **Tarefa parcial não vira checkbox marcado.** S2-9 e S3-10 seguem `[ ]` com o que falta descrito nas Notas da sprint — o placar acima conta checkbox, então marcar parcial corromperia o número.
+- ⚠️ Os arquivos das sprints **4 e 6** ainda têm `**Status:** ☐ Pendente` — corretíssimo, estão em 0%.
 - ⚠️ A tabela **Cronograma** do [`README.md`](../README.md) segue listando as 7 sprints como pendentes.
 - ❌ **Não há issues no GitHub** (a S1-23, que criaria o espelho, está aberta). Os `.md` de `sprints/` seguem sendo a única fonte de verdade.
 
@@ -188,10 +236,12 @@ O plano original ([`PLANO.md`](PLANO.md)) é de **13 semanas**: Sprint 0 (1 sem)
 | Primeiro commit | 23/05/2026 |
 | Última atividade de código | **14/08/2026** |
 | Data deste snapshot | 14/08/2026 |
-| Commits no repo | 48, concentrados em 4 dias |
-| PRs | 7, todos mergeados |
+| Commits no repo | 57, concentrados em 4 dias |
+| PRs | 7 mergeados + 1 aberto (`feature/mini-crm-chat-agendamento`) |
 
-Na linha do tempo original, agosto cairia na **Sprint 5 (semanas 10-11)**. O projeto está encerrando a **Sprint 1**. O cronograma precisa ser rebaselinado a partir da data de retomada — o dado está aqui para isso, não como cobrança.
+Na linha do tempo original, agosto cairia na **Sprint 5 (semanas 10-11)**. O projeto tem a Sprint 1 encerrada e fatias das sprints 2, 3 e 5 em pé. O cronograma precisa ser rebaselinado a partir da data de retomada — o dado está aqui para isso, não como cobrança.
+
+**Nota de método:** a execução deixou de seguir sprint por sprint e passou a cortar fatias verticais (a de 14/08 pegou S2 + S3 + S5 de uma vez). Faz sentido para um MVP guiado por demo, mas significa que o "% da sprint" acima mede cobertura de tarefa, **não** prontidão para entrega — uma sprint em 30% pode ter o fluxo principal funcionando enquanto uma em 77% não tem.
 
 ---
 
@@ -211,8 +261,9 @@ ollama pull qwen2.5:3b && ollama pull paraphrase-multilingual
 bash infra/scripts/bootstrap.sh   # stack + restart que ativa vector_memory_size
 make migrate                      # aplica no Oracle 23ai
 make seed                         # 50 pacientes, médicos, regras, slots, consultas, leads e FAQs (idempotente)
-make test                         # 412 testes, SQLite em memória
-make test-oracle                  # 21 testes contra Oracle real (VECTOR/HNSW + trigger)
+docker compose run --rm django python manage.py gerar_slots --dias 60   # expande as regras (idempotente)
+make test                         # 591 testes, SQLite em memória
+make test-oracle                  # 24 testes contra Oracle real (VECTOR/HNSW + trigger + anti-overbooking)
 make test-llm                     # 5 testes contra o Ollama
 make lint / make fmt
 make app                          # http://localhost:8000/chat/ e /admin/
@@ -232,11 +283,11 @@ Registro completo em [`RISCOS.md`](RISCOS.md) — 12 riscos, **todos ainda com s
 
 | ID | Risco | Impacto | Por que importa hoje |
 |---|---|---|---|
-| R1 | LGPD inadequada na entrega final | 🔴 Crítico | Avançou em 14/08: `Paciente` grava CPF cifrado (AES-256-GCM) com busca por HMAC, e `LOG_ACESSO` existe. Mas a tabela está **vazia** — sem o middleware da Sprint 6 não há auditoria de fato, só o lugar para guardá-la |
+| R1 | LGPD inadequada na entrega final | 🔴 Crítico | Avançou de novo em 14/08: o CPF entra cifrado pelo Admin, a busca é por HMAC e o médico só enxerga os próprios pacientes. Mas `LOG_ACESSO` continua **vazia** — sem o middleware da Sprint 6 não há auditoria de fato, só o lugar para guardá-la. E agora há mais acesso a registrar, não menos |
 | R8 | Scope creep | 🟠 Alto | [`ESCOPO.md`](ESCOPO.md) segue **sem assinatura do cliente** — a S1-22 é justamente essa mitigação, e está aberta |
 | R11 | Cliente piloto desistir no meio | 🟡 Médio | O kickoff (S1-21) ainda não aconteceu, e a S1 é a sprint das semanas 2-3 |
 | R7 | Custo da API do Claude estourar | 🟡 Médio | Ligado ao débito #8: o custo real nunca foi medido, porque a validação usou modelo local |
 
 ---
 
-*Snapshot gerado a partir do estado do repositório em 14/08/2026. Números conferidos contra os checkboxes de `sprints/*.md`, o código em `apps/`, `config/` e `infra/`, e o Oracle 23ai real (`USER_TABLES`, `USER_TRIGGERS` e contagens após `make seed`).*
+*Snapshot gerado a partir do estado do repositório em 14/08/2026. Números conferidos contra os checkboxes de `sprints/*.md`, o código em `apps/`, `config/` e `infra/`, e o Oracle 23ai real (`USER_TABLES`, `USER_TRIGGERS`, `USER_CONSTRAINTS`, contagens após `make seed` e `gerar_slots`). O fluxo do chat foi exercitado ponta a ponta contra o Oracle — 19 checagens, dentro de transação revertida ao fim.*
