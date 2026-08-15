@@ -11,6 +11,15 @@ verdade:
   compara o número de queries com 1 e com 5 consultas.
 * **A invariante ``consulta.medico == slot.medico``.** O médico não está no
   formulário; quem o preenche é ``ConsultaAdmin.save_model``, a partir do slot.
+* **A criação passa pelo ``AgendamentoService``** `[S3-7]`. Enquanto esta tela
+  criava ``Consulta`` pelo ORM não havia overbooking (o ``OneToOneField`` de
+  ``Consulta.slot`` o impede), mas o slot ficava ``LIVRE`` — e a tool
+  ``buscar_slots`` do chatbot seguia oferecendo o horário. O sintoma é
+  silencioso do lado do Admin e aparece do outro lado do sistema, que é
+  exatamente o tipo de regressão que só um teste segura.
+
+O recorte por perfil `[S2-10]` **não** é testado aqui: ele vale para três
+Admins de três apps, e mora em ``apps/core/test_permissoes.py``.
 
 Rodam em SQLite, como o resto da suíte.
 """
@@ -25,8 +34,10 @@ from django.db import connection
 from django.test import Client
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.agenda.models import AgendaRegra, AgendaSlot, Consulta
+from apps.agenda.services.agendamento import MSG_INDISPONIVEL, SlotIndisponivelError
 from apps.crm.models import Medico, Paciente
 
 pytestmark = pytest.mark.django_db
@@ -232,3 +243,122 @@ def test_medico_e_somente_leitura_no_formulario_de_consulta() -> None:
     from django.contrib.admin.sites import site
 
     assert "medico" in site._registry[Consulta].readonly_fields
+
+
+# ---------------------------------------------------------------------------
+# Consulta criada pelo Admin → AgendamentoService  `[S3-7]`
+# ---------------------------------------------------------------------------
+
+
+def _post_nova_consulta(cliente: Client, paciente: Paciente, slot: AgendaSlot, **extras: str):
+    dados = {"paciente": str(paciente.pk), "slot": str(slot.pk), "observacoes": ""}
+    dados.update(extras)
+    return cliente.post(reverse("admin:agenda_consulta_add"), dados, follow=True)
+
+
+def test_criar_consulta_pelo_admin_reserva_o_slot(
+    admin_client_logado: Client, medica: Medico
+) -> None:
+    """O ponto da S3-7: sem o service o slot ficava ``LIVRE`` e o chatbot seguia
+    oferecendo o horário a quem perguntasse."""
+    paciente = _paciente("Joana Prado", "12345678909")
+    slot = _slot(medica, dt.time(9, 0))
+    assert slot.status == AgendaSlot.Status.LIVRE
+
+    resposta = _post_nova_consulta(admin_client_logado, paciente, slot)
+
+    assert resposta.status_code == 200
+    slot.refresh_from_db()
+    assert slot.status == AgendaSlot.Status.RESERVADO
+    consulta = Consulta.objects.get(slot=slot)
+    assert consulta.status == Consulta.Status.AGENDADA
+    assert consulta.origem == Consulta.Origem.RECEPCAO
+    assert consulta.medico == medica
+
+
+def test_criar_consulta_em_slot_reservado_mostra_erro_no_form(
+    admin_client_logado: Client, medica: Medico
+) -> None:
+    """Sem 500 e sem consulta criada — o erro chega grudado no campo ``slot``."""
+    slot = _slot(medica, dt.time(9, 0))
+    _post_nova_consulta(admin_client_logado, _paciente("Primeira", "12345678909"), slot)
+    assert Consulta.objects.count() == 1
+
+    resposta = _post_nova_consulta(admin_client_logado, _paciente("Segunda", "98765432100"), slot)
+
+    assert resposta.status_code == 200
+    assert Consulta.objects.count() == 1
+    erros = resposta.context["adminform"].form.errors
+    assert "slot" in erros
+    assert "não está mais disponível" in " ".join(erros["slot"])
+
+
+def test_criar_consulta_em_slot_no_passado_e_recusado(
+    admin_client_logado: Client, medica: Medico
+) -> None:
+    ontem = timezone.localdate() - dt.timedelta(days=1)
+    slot = AgendaSlot.objects.create(
+        medico=medica, data=ontem, hora_inicio=dt.time(9, 0), hora_fim=dt.time(9, 30)
+    )
+
+    resposta = _post_nova_consulta(admin_client_logado, _paciente("Atrasada", "12345678909"), slot)
+
+    assert resposta.status_code == 200
+    assert not Consulta.objects.exists()
+    assert "slot" in resposta.context["adminform"].form.errors
+
+
+def test_corrida_no_slot_vira_mensagem_e_nao_erro_500(
+    admin_client_logado: Client, medica: Medico, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Alguém toma o horário entre a validação do form e o ``INSERT``.
+
+    O ``clean_slot`` não tem como pegar isso — ele valida antes da transação.
+    Quem recusa é o service, já dentro do ``save_model``, e o
+    ``changeform_view`` traduz a exceção em mensagem em vez de deixar subir um
+    500. O ``monkeypatch`` simula a corrida porque reproduzi-la de verdade
+    exigiria duas conexões concorrentes, que o SQLite da suíte não dá.
+    """
+    from apps.agenda import admin as admin_agenda
+
+    def _perdeu_a_corrida(**kwargs: object) -> None:
+        raise SlotIndisponivelError(MSG_INDISPONIVEL)
+
+    monkeypatch.setattr(admin_agenda.AgendamentoService, "agendar", _perdeu_a_corrida)
+    slot = _slot(medica, dt.time(9, 0))
+
+    resposta = _post_nova_consulta(admin_client_logado, _paciente("Azarada", "12345678909"), slot)
+
+    assert resposta.status_code == 200
+    assert not Consulta.objects.exists()
+    mensagens = [str(m) for m in resposta.context["messages"]]
+    assert MSG_INDISPONIVEL in mensagens
+
+
+def test_editar_consulta_existente_nao_passa_pelo_service(
+    admin_client_logado: Client, medica: Medico
+) -> None:
+    """Mudar status/observações não toca em disponibilidade — e ``agendar()`` só
+    sabe criar, então roteá-la por lá quebraria a remarcação."""
+    paciente = _paciente("Joana Prado", "12345678909")
+    slot = _slot(medica, dt.time(9, 0))
+    _post_nova_consulta(admin_client_logado, paciente, slot)
+    consulta = Consulta.objects.get(slot=slot)
+
+    resposta = admin_client_logado.post(
+        reverse("admin:agenda_consulta_change", args=[consulta.pk]),
+        {
+            "paciente": str(paciente.pk),
+            "slot": str(slot.pk),
+            "status": Consulta.Status.CONFIRMADA,
+            "origem": Consulta.Origem.RECEPCAO,
+            "observacoes": "paciente confirmou por telefone",
+        },
+        follow=True,
+    )
+
+    assert resposta.status_code == 200
+    consulta.refresh_from_db()
+    assert consulta.status == Consulta.Status.CONFIRMADA
+    assert consulta.observacoes == "paciente confirmou por telefone"
+    assert consulta.medico == medica
