@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% comment %}
+  Layout das telas internas (recepção e médico) — [S4-4].
+
+  ATENÇÃO: o `{% templatetag openblock %} extends {% templatetag closeblock %}`
+  precisa ser a **primeira tag** do arquivo, antes de qualquer comentário.
+
+  Separado do `_layout_publico.html` de propósito: a nav aqui é de navegação
+  entre módulos e mostra quem está logado, não converte visitante em paciente.
+  Misturar os dois num layout com `{% templatetag openblock %} if {% templatetag closeblock %}`
+  encheria os dois de condicional para economizar trinta linhas.
+
+  A maior parte do painel interno continua sendo o Django Admin (ADR-0005).
+  Este layout serve as telas que o Admin não expressa — hoje, a grade da agenda;
+  a divergência está registrada em `docs/adr/0006-agenda-custom.md`.
+
+  Blocos: `nav_itens`, `main`, além dos de `base.html`.
+{% endcomment %}
+
+{% block content %}
+<div style="min-height: 100vh; background: var(--color-bg);">
+
+  <nav class="nav" style="padding-inline: clamp(20px, 4vw, 48px); gap: 28px;">
+    <span class="nav-brand" style="font-size: 19px;">ClinicOS · administração</span>
+
+    {% block nav_itens %}
+      <a href="{% url 'agenda:consultas' %}" {% if secao == 'agenda' %}aria-current="location"{% endif %}>Agenda</a>
+      <a href="{% url 'admin:index' %}">CRM</a>
+      <a href="{% url 'admin:index' %}">Chatbot</a>
+      <a href="{% url 'admin:index' %}">Prontuário</a>
+    {% endblock %}
+
+    <span style="margin-left: auto; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 70%, transparent);">
+      {{ request.user.get_username }}{% if request.user.perfil %} · {{ request.user.get_perfil_display|lower }}{% endif %}
+    </span>
+
+    {# `POST` porque o logout do Django deixou de aceitar `GET` na 5.0. #}
+    <form method="post" action="{% url 'admin:logout' %}" style="margin: 0;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary">Sair</button>
+    </form>
+  </nav>
+
+  <main id="conteudo">
+    {% block main %}{% endblock %}
+  </main>
+</div>
+{% endblock %}
