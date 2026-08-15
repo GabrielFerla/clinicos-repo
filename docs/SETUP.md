@@ -99,8 +99,8 @@ Idempotente: pode rodar de novo sem medo. Se algo já existe (containers up, mig
 | 2 | Cria `.env` a partir de `.env.example` (se houver) | Não — apenas aviso se `.env.example` não existe |
 | 3 | Chama `infra/scripts/bootstrap.sh` (sobe stack + restart Oracle p/ `vector_memory_size`) | Sim — se Oracle não ficar healthy em 5min |
 | 4 | `python manage.py migrate --noinput` no container `django` | Sim — schema quebrado bloqueia |
-| 5 | Roda `python manage.py seed_initial` (se o comando existir) | Não — passo opcional, vira aviso |
-| 6 | Cria superuser `admin/admin` se não houver nenhum superuser | Não — apenas aviso |
+| 5 | Roda `python manage.py seed_initial` — dados de demonstração **e** o superuser `admin/admin` | Não — passo opcional, vira aviso |
+| 6 | Compila o CSS (`tailwind install` + `build`) e reinicia o `django` | Não — apenas aviso; sem ele as páginas abrem sem estilo |
 | 7 | Imprime tabela com endpoints + credenciais | — |
 
 ### Tempo estimado
@@ -144,11 +144,20 @@ make fmt       # ruff --fix + black
 
 Sobrescreva no shell antes do `make setup`:
 
-| Var                | Default                  | Para que serve                          |
-|--------------------|--------------------------|------------------------------------------|
-| `DJANGO_SU_USER`   | `admin`                  | username do superuser criado             |
-| `DJANGO_SU_EMAIL`  | `admin@clinicos.local`   | email do superuser                       |
-| `DJANGO_SU_PASS`   | `admin`                  | senha do superuser                       |
+| Var                          | Default                  | Para que serve                          |
+|------------------------------|--------------------------|------------------------------------------|
+| `DJANGO_SUPERUSER_USERNAME`  | `admin`                  | username do superuser criado pelo seed   |
+| `DJANGO_SUPERUSER_EMAIL`     | `admin@clinicos.local`   | email do superuser                       |
+| `DJANGO_SUPERUSER_PASSWORD`  | `admin` (só com `DEBUG`) | senha do superuser                       |
+
+> Os nomes são os mesmos do `createsuperuser` do Django, de propósito.
+>
+> **A senha padrão só vale com `DEBUG=True`.** Fora disso, o `seed_initial`
+> avisa e não cria usuário nenhum — um superuser de senha publicada aqui não
+> pode nascer porque alguém rodou `make seed` no servidor errado. Para semear
+> em ambiente com `DEBUG=False`, exporte `DJANGO_SUPERUSER_PASSWORD`.
+>
+> Rodar o seed de novo **não redefine a senha** de quem já existe.
 
 ## Troubleshooting
 
@@ -157,6 +166,23 @@ Geralmente é RAM. O container precisa de ~4 GB. Conferir `docker stats clinicos
 
 **`ImproperlyConfigured: Set the DJANGO_SECRET_KEY environment variable`**
 Faltou `DJANGO_SECRET_KEY` no `.env` (ou no shell). Confirme com `grep DJANGO_SECRET_KEY .env`.
+
+**Página abre sem estilo nenhum (`/chat/` como HTML cru)**
+Falta o CSS: `apps/theme/static/css/dist/` é gitignorado e nunca vem no clone.
+
+```bash
+make tailwind-install && make tailwind-build
+```
+
+Se continuar 404 em `/static/css/dist/styles.css` mesmo com o arquivo no lugar,
+reinicie o `django` (`docker compose restart django`): o `AppDirectoriesFinder`
+monta a lista de pastas `static/` na subida do processo, então um servidor que
+subiu antes do primeiro build ignora o app do tema até reiniciar.
+
+**`make test` verde mas o CI vermelho**
+Rode `make test-ci`: é a mesma suíte sem o `.env`, que é como o CI a executa.
+`config/settings/base.py` lê o `.env` montado no container, então variável que
+existe só ali deixa a suíte local verde por acidente.
 
 **`oracledb.exceptions.OperationalError: DPY-6005`**
 Django subiu antes do Oracle estar pronto. Espere o healthcheck (`docker compose ps`) ficar `(healthy)` e rode `docker compose restart django`.
