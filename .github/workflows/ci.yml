@@ -78,14 +78,12 @@ jobs:
       CELERY_BROKER_URL: "redis://localhost:6379/1"
       EMAIL_HOST: "localhost"
       EMAIL_PORT: "1025"
-      # CPF_ENCRYPTION_KEY e CPF_HASH_PEPPER NÃO são definidos aqui de propósito.
-      # `CPFCipher.from_urlsafe` exige base64url que decodifique para 32 bytes, e
-      # o valor fake que ficava neste bloco não era base64 válido — passava
-      # despercebido enquanto nada consumia a chave no import, e passou a quebrar
-      # a coleta ao surgir o model `Paciente` [S1-8]. O `conftest.py` da raiz já
-      # faz `setdefault` com chaves válidas de teste; como `setdefault` respeita
-      # o ambiente, qualquer valor declarado aqui venceria o dele. Ver
-      # conftest.py:35-37.
+      # CPF_ENCRYPTION_KEY e CPF_HASH_PEPPER não moram aqui: quem define os dois
+      # é `config/settings/test.py`, com valores descartáveis. Já foram tentadas
+      # as outras duas opções, e as duas falharam — chave fake neste bloco (não
+      # era base64 válido, quebrou a coleta ao surgir o `Paciente` [S1-8]) e
+      # `setdefault` no conftest (roda depois do `django.setup()`, chega tarde).
+      # Settings de teste é o único lugar avaliado na hora certa.
     steps:
       - name: Checkout
         uses: actions/checkout@v4

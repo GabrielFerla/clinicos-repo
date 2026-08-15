@@ -60,6 +60,31 @@ LLM_PROVIDER = "fake"
 EMBEDDING_PROVIDER = "fake"
 
 # ---------------------------------------------------------------------------
+# PII: chaves descartáveis de teste
+# ---------------------------------------------------------------------------
+# Mesma armadilha da seção acima, e ela já custou o CI vermelho uma vez: sem
+# estes overrides a suíte fica verde em dev por acidente — `base.py:57` faz
+# `read_env(BASE_DIR/".env")` e o `.env` montado no container alimenta as
+# settings — e quebra no CI, que não tem `.env`. Foi assim que 49 testes e 104
+# erros entraram na `main` sem ninguém ver.
+#
+# O `conftest.py` **não** resolve isso. Ele até faz `os.environ.setdefault`,
+# mas tarde demais: o `pytest-django` roda `django.setup()` em
+# `pytest_load_initial_conftests`, antes de o conftest da raiz ser importado.
+# Quando o `setdefault` executa, estas settings já congelaram em `None`.
+# Verificado: no mesmo processo, `os.environ` tem o pepper e
+# `settings.CPF_HASH_PEPPER` é `None`.
+#
+# Aqui funciona porque este módulo é avaliado *durante* o `django.setup()`,
+# depois do `base.py`. O formato é o que o código real exige: base64url que
+# decodifica para 32 bytes (`CPFCipher.from_urlsafe`).
+#
+# Os testes que exercitam chave ausente ou malformada continuam mandando —
+# usam `override_settings` e vencem estes valores.
+CPF_ENCRYPTION_KEY = "Y2xpbmljb3MtdGVzdC1vbmx5LWtleS0zMmJ5dGVzISE"
+CPF_HASH_PEPPER = "Y2xpbmljb3MtdGVzdC1vbmx5LXBlcHBlci0zMmJ5dGU"
+
+# ---------------------------------------------------------------------------
 # Banco de testes
 # ---------------------------------------------------------------------------
 # Override total do DATABASES — SQLite em memória, rápido e sem dependência

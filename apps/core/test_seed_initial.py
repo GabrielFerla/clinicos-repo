@@ -21,10 +21,13 @@ import datetime as dt
 from io import StringIO
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.test import override_settings
 
 from apps.agenda.models import AgendaRegra, AgendaSlot, Consulta
 from apps.chatbot.models import FaqVector
+from apps.core.management.commands.seed_initial import SENHA_DEV_PADRAO, SUPERUSUARIO_PADRAO
 from apps.crm.models import Especialidade, Lead, Medico, Paciente
 from apps.prontuario.models import Evolucao, LogAcesso, Prontuario
 
@@ -48,6 +51,7 @@ def _contagens() -> dict[str, int]:
         "prontuarios": Prontuario.objects.count(),
         "evolucoes": Evolucao.objects.count(),
         "faqs": FaqVector.objects.count(),
+        "usuarios": get_user_model().objects.count(),
     }
 
 
@@ -104,6 +108,60 @@ def test_segunda_execucao_nao_reescreve_a_evolucao_ja_gravada() -> None:
         list(Evolucao.objects.order_by("id").values_list("id", "conteudo_hash", "criado_em"))
         == antes
     )
+
+
+# ---------------------------------------------------------------------------
+# Superusuário do Admin
+# ---------------------------------------------------------------------------
+# O Admin é a UI do CRM no MVP1 (ADR-0005), então "semeou mas ninguém consegue
+# logar" é o mesmo que não ter semeado. O que estes testes protegem é a guarda:
+# a senha padrão é conhecida (está na documentação), e um superusuário com ela
+# não pode nascer fora de `DEBUG`.
+
+
+def test_sem_senha_no_ambiente_e_sem_debug_nao_cria_superusuario(semeado: None) -> None:
+    """``config/settings/test.py`` roda com ``DEBUG=False`` — é o caso de produção."""
+    assert not get_user_model().objects.exists()
+
+
+@override_settings(DEBUG=True)
+def test_com_debug_cria_o_superusuario_de_dev() -> None:
+    # Sem a fixture `semeado` de propósito: ela roda **antes** de o
+    # `override_settings` valer, então semearia com `DEBUG=False` e o
+    # superusuário nem seria criado.
+    _semear()
+
+    usuario = get_user_model().objects.get(username=SUPERUSUARIO_PADRAO)
+
+    assert usuario.is_superuser
+    assert usuario.is_staff
+    assert usuario.perfil == get_user_model().Perfil.ADMIN
+    # A senha precisa chegar hasheada: `get_or_create` com `password` no
+    # `defaults` gravaria o texto em claro e o login falharia.
+    assert usuario.check_password(SENHA_DEV_PADRAO)
+
+
+def test_senha_do_ambiente_dispensa_o_debug(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DJANGO_SUPERUSER_PASSWORD", "senha-vinda-do-ambiente")
+
+    _semear()
+
+    usuario = get_user_model().objects.get(username=SUPERUSUARIO_PADRAO)
+    assert usuario.check_password("senha-vinda-do-ambiente")
+
+
+@override_settings(DEBUG=True)
+def test_segunda_execucao_nao_redefine_a_senha() -> None:
+    """Quem trocou a própria senha não a perde no próximo ``make setup``."""
+    _semear()
+    usuario = get_user_model().objects.get(username=SUPERUSUARIO_PADRAO)
+    usuario.set_password("trocada-pelo-dev")
+    usuario.save(update_fields=["password"])
+
+    _semear()
+
+    usuario.refresh_from_db()
+    assert usuario.check_password("trocada-pelo-dev")
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@
 # Idempotente: rodar 2x não quebra nada.
 #   - containers já up → segue
 #   - migration já aplicada → segue
-#   - superuser já existe → pula
+#   - superuser já existe → pula (quem cuida disso é o seed_initial)
 #   - .env já existe → pula
 #
 # Etapas:
@@ -18,8 +18,8 @@
 #   2. Garante .env (cópia de .env.example se existir)
 #   3. Sobe stack via infra/scripts/bootstrap.sh
 #   4. Aplica migrations Django
-#   5. Roda seed_initial (se já existir como management command)
-#   6. Cria superuser admin/admin (apenas se não houver nenhum)
+#   5. Roda seed_initial — dados de demonstração **e** o superuser admin/admin
+#   6. Compila o CSS do Tailwind (gitignorado: não vem pronto no clone)
 #   7. Imprime endpoints úteis
 #
 # NÃO instala Python no host: o ambiente Python é o container `django`.
@@ -106,32 +106,27 @@ else
   warn "management command 'seed_initial' ainda não existe (S1-16 cria); pulando."
 fi
 
-# ----- 6) superuser idempotente --------------------------------------------
+# ----- 6) CSS do Tailwind ---------------------------------------------------
 
-step "garantindo superuser admin..."
+# `apps/theme/static/css/dist/` é gitignorado, então quem clona o repo **nunca**
+# recebe o CSS pronto. Sem este passo o `/chat/` abre como HTML cru — o
+# `{% tailwind_css %}` do `base.html` aponta para um arquivo que não existe.
+step "compilando o CSS (Tailwind)..."
 
-# Heredoc Python para não brigar com aspas no shell.
-SU_SCRIPT=$(cat <<'PYEOF'
-import os
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
-if User.objects.filter(is_superuser=True).exists():
-    print("[setup] superuser já existe — pulando")
-else:
-    User.objects.create_superuser(
-        username=os.environ.get("DJANGO_SU_USER", "admin"),
-        email=os.environ.get("DJANGO_SU_EMAIL", "admin@clinicos.local"),
-        password=os.environ.get("DJANGO_SU_PASS", "admin"),
-    )
-    print("[setup] superuser 'admin' criado (senha: admin) — TROCAR antes de prod!")
-PYEOF
-)
-
-if docker compose exec -T django python manage.py shell -c "$SU_SCRIPT"; then
-  ok "superuser garantido"
+if docker compose exec -T django python manage.py tailwind install; then
+  if docker compose exec -T django python manage.py tailwind build; then
+    # O restart não é zelo: o `AppDirectoriesFinder` monta a lista de pastas
+    # `static/` **na subida** do processo, e `apps/theme/static/` só passa a
+    # existir agora, no build acima. Sem reiniciar, o servidor que já está no ar
+    # ignora o app inteiro e devolve 404 no CSS — página sem estilo, arquivo no
+    # lugar certo, `findstatic` achando. Medido neste ambiente.
+    docker compose restart django >/dev/null 2>&1 || warn "restart do django falhou"
+    ok "CSS compilado"
+  else
+    warn "tailwind build falhou; as páginas abrirão sem estilo. Rode 'make tailwind-build'."
+  fi
 else
-  warn "não foi possível garantir superuser; veja logs do Django."
+  warn "tailwind install falhou (npm no container?); pulando o build."
 fi
 
 # ----- 7) endpoints ---------------------------------------------------------
