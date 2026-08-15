@@ -60,6 +60,7 @@ ROTULOS_TOOL = {
     "listar_especialidades_disponiveis": "Consultando as especialidades…",
     "buscar_slots": "Consultando a agenda…",
     "buscar_faq": "Procurando na base de informações…",
+    "criar_lead_e_consulta": "Agendando a sua consulta…",
 }
 
 # Fatia usada ao reemitir texto já pronto (atalho sem ferramenta). Palavra a

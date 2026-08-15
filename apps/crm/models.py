@@ -195,6 +195,12 @@ class Medico(models.Model):
         rqe: Registro de Qualificação de Especialista. Opcional — nem todo
             médico tem RQE emitido.
         ativo: Soft delete (ver ``ARQUITETURA.md``, "Soft delete").
+        usuario: Login do próprio médico, quando ele tem um `[S2-10]`. É este
+            vínculo — e não o nome, nem um ``Group`` do Django — que sustenta a
+            regra "médico vê só os seus": ``Group`` expressa *o que* um perfil
+            pode fazer, nunca *sobre quais linhas*, e casar por nome quebraria
+            no primeiro homônimo ou na primeira correção de grafia. Ver
+            ``apps/core/admin.py`` (``RestritoAoMedicoMixin``).
     """
 
     nome = models.CharField("nome", max_length=150)
@@ -210,6 +216,29 @@ class Medico(models.Model):
         "ativo",
         default=True,
         help_text="Desmarque para tirar da agenda e do chatbot sem apagar o histórico.",
+    )
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        # SET_NULL, e não CASCADE: desligar o login de alguém que saiu da
+        # clínica não pode apagar o médico — a agenda, as consultas e as
+        # evoluções assinadas por ele continuam existindo (retenção CFM).
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="medico",
+        verbose_name="usuário",
+        # O ``unique`` implícito do OneToOne já é respaldado por índice no
+        # Oracle; um segundo índice sobre a mesma coluna estoura
+        # ``ORA-01408: such column list already indexed`` — exatamente o gotcha
+        # documentado em ``Especialidade.slug`` e ``Paciente.cpf_hash``. Por
+        # isso **não** há ``models.Index`` extra para esta coluna em
+        # ``Meta.indexes``: o índice que ``Usuario → Medico`` precisa (a busca
+        # de ``RestritoAoMedicoMixin``) é o da própria constraint.
+        db_index=False,
+        help_text=(
+            "Login deste médico no painel. Preenchido, ele passa a ver apenas "
+            "os próprios pacientes, consultas e prontuários."
+        ),
     )
     criado_em = models.DateTimeField("criado em", auto_now_add=True)
 

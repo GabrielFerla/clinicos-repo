@@ -27,10 +27,10 @@ Cada sprint tem:
 |---|---|---|---|
 | [Sprint 0 — Validação técnica](sprint-0-validacao.md) | Semana 1 | 🔄 26/27 | Falta só apresentar a spike (S0-27) |
 | [Sprint 1 — Fundação](sprint-1-fundacao.md) | Semanas 2-3 | 🔄 20/26 | Trilha técnica concluída; faltam design, cliente e processo |
-| [Sprint 2 — CRM interno](sprint-2-crm.md) | Semanas 4-5 | ☐ Pendente | — |
-| [Sprint 3 — Agenda](sprint-3-agenda.md) | Semanas 6-7 | ☐ Pendente | — |
+| [Sprint 2 — CRM interno](sprint-2-crm.md) | Semanas 4-5 | 🔄 6/20 | CRUDs, permissões por perfil e testes entregues na fatia de 14/08 |
+| [Sprint 3 — Agenda](sprint-3-agenda.md) | Semanas 6-7 | 🔄 4/17 | `gerar_slots` e `AgendamentoService` entregues na fatia de 14/08 |
 | [Sprint 4 — Site público](sprint-4-site.md) | Semanas 8-9 | ☐ Pendente | — |
-| [Sprint 5 — Chatbot inteligente](sprint-5-chatbot.md) | Semanas 10-11 | 🔄 12/33 | Fatia vertical do chat de leitura entregue fora de ordem (ver `docs/CHAT_MVP.md`) |
+| [Sprint 5 — Chatbot inteligente](sprint-5-chatbot.md) | Semanas 10-11 | 🔄 16/33 | Chat de leitura (ver `docs/CHAT_MVP.md`) e, desde 14/08, agendamento pelo chat |
 | [Sprint 6 — Atendimento + hardening](sprint-6-prontuario.md) | Semanas 12-13 | ☐ Pendente | — |
 
 ## Legenda de responsáveis

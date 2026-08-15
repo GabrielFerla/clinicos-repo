@@ -43,6 +43,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.chatbot import sse
 from apps.chatbot.models import InteracaoChat
 from apps.chatbot.services.chat import ChatService
+from apps.chatbot.tools import construir_registry
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,12 @@ def _eventos(conversa_id: uuid.UUID, sequencia: int, pergunta: str):
         return
 
     historico = _historico(conversa_id)
-    yield from ChatService().responder(
+    # O registry é montado aqui porque é aqui que o ``conversa_id`` já foi
+    # autorizado contra a sessão. A ferramenta de agendamento precisa dele para
+    # achar o lead da conversa `[S5-24]`, e ele **não pode** vir do modelo: como
+    # argumento de tool, uma alucinação (ou uma injeção no texto do paciente)
+    # mexeria no funil de outra pessoa.
+    yield from ChatService(registry=construir_registry(conversa_id=conversa_id)).responder(
         pergunta=pergunta,
         conversa_id=conversa_id,
         historico=historico,
