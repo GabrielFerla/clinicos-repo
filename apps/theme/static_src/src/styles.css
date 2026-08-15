@@ -462,6 +462,21 @@ textarea.input { min-height: 90px; resize: vertical; }
   .nav-menu { display: block; }
 }
 
+/* Gatilho em linha que abre o assistente. É `<button>` porque não navega para
+   lugar nenhum — um `<a href="#">` promete um destino e não entrega, o que
+   confunde teclado e leitor de tela —, mas precisa parecer link dentro do
+   texto corrido, e por isso desmonta o botão até o osso. */
+.link-acao {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--color-accent-700);
+  cursor: pointer;
+  text-underline-offset: 3px;
+}
+.link-acao:hover { color: var(--color-accent-600); text-decoration: underline; }
+
 /* Assistente flutuante [S4-15]. O painel é `position: fixed` junto do botão,
    ancorado ao canto; no estreito ele ocupa a largura útil menos as margens. */
 .chat-flutuante {

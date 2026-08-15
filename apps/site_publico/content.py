@@ -129,14 +129,6 @@ ESPECIALIDADES: list[dict[str, str]] = [
     },
 ]
 
-# Rótulos do `<select>` do formulário de lead. A primeira opção existe porque
-# o paciente que não sabe a especialidade é o caso mais comum, e obrigá-lo a
-# escolher uma errada sujaria o funil da recepção.
-OPCOES_ESPECIALIDADE: list[str] = [
-    "Não sei — quero orientação",
-    *[esp["nome"] for esp in ESPECIALIDADES],
-]
-
 # ── Exames ───────────────────────────────────────────────────────────────────
 EXAMES: list[dict[str, str]] = [
     {

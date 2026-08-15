@@ -19,9 +19,11 @@
     `components/_layout_publico.html`; aqui só preenchemos `main`. Por isso
     também não sobrescrevemos `extra_head`/`extra_body`: fazer isso sem
     `block.super` mataria o CSS do menu e o script do assistente.
-  * **Não envia o formulário.** A seção "Agendar" é visual: sem `action`, sem
-    `method`, sem `csrf_token`. Gravar o `Lead` no CRM é a **S4-11** — até lá o
-    botão não deve prometer nada que o backend não cumpra.
+  * **Não tem formulário.** A seção "Agendar" encaminha para o assistente, que
+    consulta a agenda real e reserva na hora. O formulário de captação que o
+    protótipo trazia saiu: deixar recado oferece menos do que o chat já faz.
+    Se a **S4-11** (lead no CRM) voltar à mesa, o formulário entra ao lado
+    daquela chamada, não no lugar dela.
   * **Não carrega foto.** Onde o protótipo tinha o web component `<image-slot>`
     (65 KB de JavaScript de ferramenta de design), aqui existe só uma caixa com
     a proporção certa e preenchimento neutro, pronta para receber um `<img>`
@@ -38,8 +40,9 @@
   Acessibilidade [S4-19]: as chapas `.plate` do CMYK repetem texto que já está
   no `.paper`, então vão todas `aria-hidden="true"` — o leitor de tela lê a
   manchete uma vez. As caixas de foto vazias são decorativas e não anunciam
-  nada. Todo campo do formulário tem `<label>` de verdade envolvendo o controle,
-  e o grupo de rádios tem `<fieldset>`/`<legend>`.
+  nada. Os gatilhos que abrem o assistente são `<button type="button">`, e não
+  `<a href="#">`: eles não navegam para lugar nenhum, e um link que não leva a
+  um destino mente para quem navega por teclado ou leitor de tela.
 {% endcomment %}
 
 {% block title %}{{ clinica.nome }} — oftalmologia, exames e cinco subespecialidades{% endblock %}
@@ -72,7 +75,7 @@
     <a href="#especialidades" class="btn btn-secondary" style="font-size: 17px; padding: 12px 24px;">Ver especialidades</a>
   </div>
   <p style="margin: 20px 0 0; font-size: 15.5px; line-height: 28px; color: color-mix(in srgb, var(--color-text) 70%, transparent);">
-    Dúvida rápida sobre convênio, preço ou preparo? <a href="#" data-abrir-chat>Pergunte aqui mesmo</a>.
+    Dúvida rápida sobre convênio, preço ou preparo? <button type="button" class="link-acao" data-abrir-chat>Pergunte aqui mesmo</button>.
   </p>
 </section>
 
@@ -233,64 +236,39 @@
 </section>
 
 {% comment %}
-  ── 9. Captação de lead ────────────────────────────────────────────────────
-  Formulário VISUAL: sem `action`, sem `method`, sem `csrf_token`, porque ainda
-  não há para onde postar. Persistir o lead no CRM é a **S4-11** — quando ela
-  entrar, este `<form>` ganha `method="post"`, o token e a view de destino. Os
-  atributos `name` já estão nomeados como o backend vai querer receber.
+  ── 9. Agendar ─────────────────────────────────────────────────────────────
+  Aqui existia um formulário de captação de lead. Saiu: o agendamento da
+  clínica acontece **pelo assistente**, que consulta a agenda real, mostra os
+  horários livres e reserva na hora — um formulário que só deixa recado
+  competiria com ele oferecendo menos.
 
-  Também não há a mensagem de "obrigado" do protótipo: ela dependia do estado
-  de JavaScript do componente de design, e sem POST não haveria o que confirmar.
+  A seção continua existindo, e continua com `id="agendar"`, porque é o alvo de
+  três links: os dois "Agendar consulta" da nav (desktop e mobile) e o do hero.
+  Removê-la por inteiro transformaria os três em âncora morta.
+
+  Se a S4-11 (lead no CRM) voltar a ser desejada, é aqui que o formulário
+  entra — ao lado desta chamada, não no lugar dela.
 {% endcomment %}
 <section id="agendar" style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 84px;">
   <div class="regra-dupla" style="margin-bottom: 42px;"></div>
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 42px clamp(28px, 5vw, 84px); align-items: start;">
-    <div>
-      <p style="margin: 0; font-size: 15.5px; line-height: 28px;">
-        {{ clinica.telefone }} · WhatsApp {{ clinica.whatsapp }} · <a href="#" data-abrir-chat>dúvida rápida aqui</a>
-      </p>
-      <p style="margin: 14px 0 0; font-size: 13px; line-height: 24px; color: color-mix(in srgb, var(--color-text) 70%, transparent); max-width: 44ch;">
-        Cancelamento e remarcação gratuitos até 24 horas antes. Não atendemos pelo SUS.
-      </p>
-    </div>
 
-    <form style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 20px;">
-      <label style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;">
-        <span style="font-size: 15px;">Nome</span>
-        <input class="input" name="nome" type="text" autocomplete="name" placeholder="Como podemos te chamar" style="font-size: 16px; padding: 11px 14px;">
-      </label>
-      <label style="display: flex; flex-direction: column; gap: 6px;">
-        <span style="font-size: 15px;">WhatsApp</span>
-        <input class="input" name="telefone" type="tel" autocomplete="tel" placeholder="(51) 90000-0000" style="font-size: 16px; padding: 11px 14px;">
-      </label>
-      <label style="display: flex; flex-direction: column; gap: 6px;">
-        <span style="font-size: 15px;">Especialidade</span>
-        <select class="input" name="especialidade" style="font-size: 16px; padding: 11px 14px;">
-          {% for opcao in opcoes_especialidade %}
-            <option value="{{ opcao }}">{{ opcao }}</option>
-          {% endfor %}
-        </select>
-      </label>
+  <span class="sobrelinha">Agendar</span>
+  <h2 style="margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: clamp(26px, 3vw, 34px); line-height: 1.24; letter-spacing: -0.015em; max-width: 20ch;">O horário sai pelo assistente</h2>
 
-      {# O período é um grupo de rádios porque são quatro opções curtas: o segmentado mostra todas de uma vez, e o `<legend>` dá o rótulo que o leitor de tela anuncia antes delas. #}
-      <fieldset style="grid-column: 1 / -1; margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px;">
-        <legend style="padding: 0; font-size: 15px;">Período de preferência</legend>
-        <div class="seg" style="width: fit-content; max-width: 100%;">
-          <label class="seg-opt" style="white-space: nowrap;"><input type="radio" name="periodo" value="Manhã" checked><span>Manhã</span></label>
-          <label class="seg-opt" style="white-space: nowrap;"><input type="radio" name="periodo" value="Tarde"><span>Tarde</span></label>
-          <label class="seg-opt" style="white-space: nowrap;"><input type="radio" name="periodo" value="Sábado"><span>Sábado</span></label>
-          <label class="seg-opt" style="white-space: nowrap;"><input type="radio" name="periodo" value="Tanto faz"><span>Tanto faz</span></label>
-        </div>
-      </fieldset>
+  <p style="margin: 20px 0 0; font-size: 15.5px; line-height: 28px; max-width: 52ch; color: color-mix(in srgb, var(--color-text) 78%, transparent);">
+    Ele consulta a agenda real, mostra os horários livres do médico certo para o seu caso e reserva na hora. Convênio, valores e preparo de exame também são com ele — e o que não souber, encaminha para a recepção.
+  </p>
 
-      <div style="grid-column: 1 / -1; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-        <button type="submit" class="btn btn-primary" style="font-size: 17px; padding: 12px 24px;">Quero ser chamado</button>
-      </div>
-      <p style="grid-column: 1 / -1; margin: 0; font-size: 13px; line-height: 24px; color: color-mix(in srgb, var(--color-text) 70%, transparent);">
-        Usamos seus dados apenas para retornar sobre esta consulta (LGPD). O registro entra no funil da recepção como lead novo.
-      </p>
-    </form>
+  <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 28px;">
+    <button type="button" class="btn btn-primary" style="font-size: 17px; padding: 12px 24px;" data-abrir-chat>Falar com o assistente</button>
   </div>
+
+  <p style="margin: 28px 0 0; font-size: 15.5px; line-height: 28px;">
+    Prefere telefone? {{ clinica.telefone }} · WhatsApp {{ clinica.whatsapp }} · {{ clinica.horario_semana|lower }}, {{ clinica.horario_sabado|lower }}.
+  </p>
+  <p style="margin: 14px 0 0; font-size: 13px; line-height: 24px; color: color-mix(in srgb, var(--color-text) 70%, transparent); max-width: 52ch;">
+    Cancelamento e remarcação gratuitos até 24 horas antes. Não atendemos pelo SUS.
+  </p>
 </section>
 
 {% endblock %}

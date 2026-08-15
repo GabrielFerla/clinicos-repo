@@ -6,8 +6,10 @@ de lá para o porquê), então a página responde sem tocar no Oracle e continua
 de pé mesmo com o banco fora do ar — o que importa para uma landing que é a
 porta de entrada da clínica.
 
-O formulário de captação da seção "Agendar" é **visual**: não tem `action` e
-não existe view de POST. Gravar o `Lead` no CRM é a **S4-11**.
+A seção "Agendar" não tem formulário: ela encaminha para o assistente, que
+consulta a agenda real e reserva na hora. O formulário de captação do protótipo
+saiu — deixar recado oferece menos do que o chat já faz. Se a **S4-11** (lead no
+CRM) voltar à mesa, é ali que ele entra, ao lado da chamada e não no lugar dela.
 """
 
 from __future__ import annotations
@@ -35,7 +37,6 @@ def home(request: HttpRequest) -> HttpResponse:
         "indice": content.INDICE,
         "colunas": content.COLUNAS,
         "especialidades": content.ESPECIALIDADES,
-        "opcoes_especialidade": content.OPCOES_ESPECIALIDADE,
         "exames": content.EXAMES,
         "medicos": content.MEDICOS,
         "citacao": content.CITACAO,
