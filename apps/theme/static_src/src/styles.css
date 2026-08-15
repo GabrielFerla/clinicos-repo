@@ -1,19 +1,485 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* ---------------------------------------------------------------------------
- * Componentes utilitários do ClinicOS.
+ * ClinicOS — folha única do tema, sobre o design system **Broadsheet** [S1-18].
  *
- * Tudo declarado dentro de `@layer components` para que o Tailwind possa
- * sobrescrever via utilidades (`class="btn-primary px-6"` funciona).
+ * Broadsheet é jornal impresso na web: Source Serif 4 quase-preta sobre papel,
+ * as tintas de processo (ciano e magenta) usadas pequenas e deliberadamente,
+ * como spot color. A página **não** se estrutura com réguas, bordas ou caixas —
+ * a hierarquia vem da escala serifada e do espaço em branco. O guia completo
+ * está em `docs/DESIGN_SYSTEM.md`; o do/don't de lá vale como regra de review.
+ *
+ * ORDEM DO ARQUIVO — não reordene sem ler isto:
+ *
+ *   1. `@import` da fonte    → tem de ser a PRIMEIRA regra do arquivo. CSS exige
+ *                              `@import` antes de qualquer regra; o PostCSS não
+ *                              conserta isso, só emite o import onde ele está e
+ *                              o browser descarta.
+ *   2. `@tailwind base`      → preflight do Tailwind (reset).
+ *   3. base do Broadsheet    → vem DEPOIS do preflight para vencê-lo. O
+ *                              preflight zera o tamanho dos h1-h6; é aqui que a
+ *                              escala serifada é reposta.
+ *   4. `@tailwind components`
+ *   5. componentes do DS     → CSS puro, **fora** de `@layer components`.
+ *   6. `@tailwind utilities` → por último, para que utilitário vença componente.
+ *
+ * POR QUE OS COMPONENTES NÃO ESTÃO EM `@layer components`:
+ * o Tailwind faz tree-shaking do que está dentro de `@layer` — só emite as
+ * classes que encontrou nos globs de `content`. O `.btn`/`.btn-primary` que
+ * existiam aqui antes estavam em `@layer components`, não eram usados em
+ * template nenhum e por isso **sumiam do CSS compilado**. Seletores compostos
+ * do DS (`.cmyk .print image-slot`, `.seg-opt:has(input:checked)`) são
+ * justamente os que esse matcher erra. Em CSS puro nada é descartado, e a
+ * cascata continua correta porque `@tailwind utilities` vem depois: um
+ * utilitário de uma classe ainda sobrescreve um componente de uma classe.
  * ------------------------------------------------------------------------- */
-@layer components {
-  .btn {
-    @apply px-4 py-2 rounded-md font-medium transition-colors;
-  }
 
-  .btn-primary {
-    @apply btn bg-blue-600 text-white hover:bg-blue-700;
-  }
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+@tailwind base;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tokens — a fonte da verdade do visual. Nada de hex, nome de fonte ou px
+   solto nos templates: puxe sempre de `var(--*)`.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201e1d;
+  --color-accent: #0088b0;
+  --color-accent-2: #d6006c;
+  --color-divider: color-mix(in srgb, #201e1d 16%, transparent);
+
+  /* Rampas tonais — geradas em OKLCH sobre uma única escala de luminosidade,
+     então o mesmo passo de qualquer papel tem o mesmo peso visual. Use 100-300
+     para preenchimentos, hovers e bordas discretas; 500 como base; 700-900 para
+     texto sobre preenchimento tonal e estados pressionados. */
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+
+  --color-accent-100: #e9f8ff;
+  --color-accent-200: #cbeeff;
+  --color-accent-300: #99e0ff;
+  --color-accent-400: #62c5ee;
+  --color-accent-500: #38a6cf;
+  --color-accent-600: #1186ac;
+  --color-accent-700: #006786;
+  --color-accent-800: #004961;
+  --color-accent-900: #0a303e;
+
+  --color-accent-2-100: #fff1f4;
+  --color-accent-2-200: #ffdee6;
+  --color-accent-2-300: #ffc0d0;
+  --color-accent-2-400: #ff90b1;
+  --color-accent-2-500: #ff458e;
+  --color-accent-2-600: #d82071;
+  --color-accent-2-700: #aa0b56;
+  --color-accent-2-800: #790e3d;
+  --color-accent-2-900: #4b1528;
+
+  /* A terceira tinta de processo. Ciano e magenta são os acentos do sistema;
+     este amarelo completa o conjunto para as chapas (.cmyk-head, .cmyk-num).
+     É cor de tratamento de impressão, **não** de interface: corpo de texto e
+     cromo nunca a usam. */
+  --color-process-yellow: #edbb00;
+
+  /* Tipografia. O fallback é serifado de propósito: o `@import` acima depende
+     de rede, e o README do spike do chat registra que rede corporativa do
+     cliente piloto bloqueia CDN. Caindo em `system-ui` (uma sans, como vinha no
+     bundle original) a página inteira trocaria de voz — o serif É o cromo neste
+     sistema. Self-hospedar o woff2 fica para o [S4-18]. */
+  --font-heading: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-heading-weight: 600;
+  --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+
+  /* Escala de espaço em densidade 1.25x. Não aperte: o ar é o layout. */
+  --space-1: 5px;
+  --space-2: 10px;
+  --space-3: 15px;
+  --space-4: 20px;
+  --space-6: 30px;
+  --space-8: 40px;
+
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 4px;
+
+  /* Elevação derivada do papel — sombra entintada, nunca preto puro. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base — reposta depois do preflight do Tailwind, que zera os h1-h6.
+   ═══════════════════════════════════════════════════════════════════════ */
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 400;
+  text-wrap: pretty;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-2);
+}
+h1 { font-size: 42px; }
+h2 { font-size: 32px; }
+h3 { font-size: 25px; }
+h4 { font-size: 20px; }
+h5 { font-size: 16px; }
+h6 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+p { margin: 0 0 var(--space-3); }
+a { color: var(--color-accent-700); text-underline-offset: 3px; text-decoration: none; }
+a:hover { color: var(--color-accent-600); text-decoration: underline; }
+img { display: block; max-width: 100%; }
+figure { margin: 0; }
+figcaption {
+  font-size: 11px;
+  margin-top: var(--space-1);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+.text-muted { color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+
+/* Estados de foco temáticos — nunca o anel azul padrão do browser. */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+/* Link de pulo — obrigatório para o [S4-19]; some da tela até receber foco. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: var(--space-2);
+  z-index: 100;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-radius: var(--radius-md);
+}
+.skip-link:focus { left: var(--space-3); }
+
+@keyframes subir {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulsar {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="animation"], .anim-subir, .anim-pulsar { animation: none !important; }
+}
+
+@tailwind components;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tratamentos de impressão.
+
+   Tudo aqui é CSS puro — **nenhum JavaScript**. O bundle do design trazia um
+   `print-plates.js` com filtros SVG de separação para o `.cmyk` (a foto impressa
+   como suas quatro chapas fora de registro), mas o próprio design entrega com
+   `fotosEmPlaca: false`, ou seja, as fotos usam `.halftone`. E `.cmyk-head` /
+   `.cmyk-num` são construções de `text-shadow` + `mix-blend-mode`, que não
+   precisam de filtro nenhum. Se um dia o `.cmyk` for ligado, aí sim o script
+   dos filtros precisa entrar no documento.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Retícula de jornal — o tratamento padrão das fotos. */
+.halftone { position: relative; filter: grayscale(0.35) contrast(1.15); overflow: hidden; }
+.halftone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.22) 30%, transparent 32%);
+  background-size: 3px 3px;
+  mix-blend-mode: multiply;
+}
+
+/* Numeral em chapa — algarismos de display impressos como chapas de processo.
+   TRÊS chapas (C, M, Y — sem preto): o núcleo escuro nasce inteiro da
+   multiplicação C×M×Y, e as franjas são a deriva de registro. O `.paper`
+   carrega o texto de verdade (leitores de tela leem uma vez); as `.plate` são
+   repetições `aria-hidden`. A construção pinta o próprio fundo em
+   `--cmyk-num-ground` para que as chapas em `multiply` sempre tenham papel por
+   baixo, mesmo dentro de contexto de empilhamento isolado. */
+.cmyk-num {
+  --cmyk-num-ground: var(--color-bg);
+  position: relative;
+  width: fit-content;
+  line-height: 0.9;
+  font-feature-settings: "pnum" 1;
+  background: var(--cmyk-num-ground);
+  padding: 0.12em;
+  margin: -0.12em;
+}
+.cmyk-num .paper {
+  color: var(--color-bg);
+  text-shadow: 0.036em 0.025em 0 var(--color-bg), -0.031em -0.023em 0 var(--color-bg);
+}
+/* O bundle original trazia `text-box: trim-both cap alphabetic` nas chapas,
+   porque lá o elemento hospedeiro aparava a própria caixa e as chapas
+   precisavam aparar igual. Nos nossos templates o hospedeiro **não** apara —
+   então aparar só as chapas as jogaria meia entrelinha abaixo do papel. Fora
+   de propósito: papel e chapa ficam alinhados por não aparar nenhum dos dois. */
+.cmyk-num .plate { position: absolute; inset: 0.12em; mix-blend-mode: multiply; }
+.cmyk-num .plate-c { color: var(--color-accent); }
+.cmyk-num .plate-m {
+  color: var(--color-accent-2);
+  translate: calc(0.036em + 0.018em * var(--press-nx, 0)) calc(0.025em + 0.0125em * var(--press-ny, 0));
+}
+.cmyk-num .plate-y {
+  color: var(--color-process-yellow);
+  translate: calc(-0.031em + 0.018em * var(--press-nx, 0)) calc(-0.023em + 0.0125em * var(--press-ny, 0));
+}
+
+/* Manchete em chapa — a mesma construção do numeral, na METADE do deslocamento.
+   As hairlines da serifada em display são mais finas que os traços do numeral;
+   com o deslocamento cheio elas somem dentro da franja e o resultado lê como
+   pôster anaglifo, não como respiro fora de registro. Aplique em cada `.line`.
+   As chapas são inertes à mão (`pointer-events`/`user-select`), para que um
+   clique triplo selecione a manchete uma vez, e não quatro. */
+.cmyk-head { position: relative; }
+.cmyk-head .paper {
+  color: var(--color-bg);
+  text-shadow: 0.027em 0.0185em 0 var(--color-bg), -0.0245em -0.0175em 0 var(--color-bg);
+}
+.cmyk-head .plate {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  user-select: none;
+}
+.cmyk-head .plate-c { color: var(--color-accent); }
+.cmyk-head .plate-m {
+  color: var(--color-accent-2);
+  translate: calc(0.018em + 0.009em * var(--press-nx, 0)) calc(0.0125em + 0.006em * var(--press-ny, 0));
+}
+.cmyk-head .plate-y {
+  color: var(--color-process-yellow);
+  translate: calc(-0.0155em + 0.009em * var(--press-nx, 0)) calc(-0.0115em + 0.006em * var(--press-ny, 0));
+}
+
+/* `--press-nx`/`--press-ny` são a inclinação do ponteiro como fator -1..1, que
+   o driver de impressão do bundle publicaria em `:root`. Sem o driver elas
+   valem 0 e as chapas ficam estáticas — que é exatamente o efeito impresso.
+   Por isso o script não foi portado. */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Componentes. CSS puro sobre HTML puro: sem JavaScript, sem passo de build
+   além do próprio Tailwind. Cada classe está documentada em
+   `docs/DESIGN_SYSTEM.md`.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* — régua — o sistema prefere espaço em branco; evite. — */
+.hr { height: 1px; border: 0; margin: var(--space-4) 0; background: var(--color-divider); }
+
+/* — botões — */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  border-radius: var(--radius-md);
+}
+.btn svg { display: block; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:hover { text-decoration: none; }
+.btn-primary { background: var(--color-accent); color: var(--color-bg); }
+.btn-primary:hover { background: var(--color-accent-600); color: var(--color-bg); }
+.btn-primary:active { background: var(--color-accent-700); }
+.btn-secondary { border-color: var(--color-divider); color: var(--color-text); }
+.btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); color: var(--color-text); }
+.btn-secondary:active { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
+.btn-ghost { color: var(--color-accent-700); padding-inline: var(--space-1); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.btn-ghost:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.btn-icon { width: 36px; height: 36px; padding: 0; }
+.btn-block { width: 100%; margin-top: var(--space-2); }
+
+/* — formulários — */
+.field > label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 5px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+}
+.input {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+/* Cinza explícito e medido: o padrão do browser não alcança 4.5:1 sobre o
+   preenchimento; 65% de tinta mede 4.8:1 ali, ainda um passo mais quieto que o
+   texto digitado. `opacity: 1` anula o esmaecimento padrão do Firefox. */
+.input::placeholder { color: color-mix(in srgb, var(--color-text) 65%, transparent); opacity: 1; }
+.input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
+textarea.input { min-height: 90px; resize: vertical; }
+
+.radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.radio input, .seg-opt input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.radio .dot { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 1.5px solid var(--color-divider); }
+.radio:hover .dot { border-color: var(--color-accent); }
+.radio input:checked + .dot {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  box-shadow: inset 0 0 0 4px var(--color-bg);
+}
+.radio input:focus-visible + .dot { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+.seg { display: inline-flex; overflow: hidden; border: 1px solid var(--color-divider); border-radius: var(--radius-md); }
+.seg-opt { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
+.seg-opt:has(input:checked) { background: var(--color-accent); color: var(--color-bg); }
+.seg-opt:not(:has(input:checked)):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.seg-opt:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+
+/* — cards — o ÚNICO componente com caixa. Reserve para itens genuinamente
+     discretos (listagens); nunca para estruturar layout. — */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.card-kicker { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent-700); }
+.card-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 17px; line-height: 1.2; }
+.card-body { margin: 0; font-size: 13px; opacity: 0.8; flex: 1; }
+.card-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: color-mix(in srgb, var(--color-text) 50%, transparent); }
+.elev-sm { box-shadow: var(--shadow-sm); }
+.elev-md { box-shadow: var(--shadow-md); }
+.elev-lg { box-shadow: var(--shadow-lg); }
+
+/* — tags — */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: calc(var(--radius-md) * 0.75);
+}
+.tag-accent { background: var(--color-accent-100); color: var(--color-accent-800); }
+.tag-accent-2 { background: var(--color-accent-2-100); color: var(--color-accent-2-800); }
+.tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
+.tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent-700); }
+
+/* — navegação — */
+.nav { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: none; }
+.nav-brand { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 18px; margin-right: auto; }
+.nav a { color: inherit; text-decoration: none; font-size: 14px; }
+.nav a:hover, .nav a[aria-current='page'], .nav a[aria-current='location'] { color: var(--color-accent-700); }
+
+/* — tabelas — */
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-divider);
+}
+.table td { padding: var(--space-2); border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
+.table tbody tr:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+
+/* — diálogo — */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+}
+.dialog {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+.dialog-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 20px; }
+.dialog-body { font-size: 14px; opacity: 0.85; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Móveis de primeira página — as réguas que ESTE sistema imprime de propósito.
+   O par grosso-fino em torno do trilho de dateline é a única régua permitida:
+   é mobiliário de manchete, não divisória de seção.
+   ═══════════════════════════════════════════════════════════════════════ */
+.regra-dupla { height: 5px; border-top: 2px solid var(--color-text); border-bottom: 1px solid var(--color-text); }
+.regra-fina { height: 0; border-top: 1px solid var(--color-text); }
+
+/* Sobrelinha em versalete — o rótulo que abre quase toda seção. */
+.sobrelinha {
+  display: block;
+  font-size: 13px;
+  line-height: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  margin: 0 0 var(--space-3);
+}
+
+/* Condutor pontilhado do índice de primeira página. */
+.conduto {
+  flex: 1 1 auto;
+  min-width: 28px;
+  align-self: flex-end;
+  margin-bottom: 0.34em;
+  border-bottom: 1px dotted color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+
+@tailwind utilities;
