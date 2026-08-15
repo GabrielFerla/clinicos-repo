@@ -72,6 +72,65 @@ _PALAVRAS = re.compile(r"\S+\s*")
 _HORARIO = re.compile(r"\b(?:[01]?\d|2[0-3])[:h][0-5]\d\b")
 _MEDICO = re.compile(r"\bDra?\.\s*[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÀ-ÿ]+(?:\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÀ-ÿ]+)*")
 
+# O `slot_id` é dado interno: o modelo **precisa** dele para chamar
+# `criar_lead_e_consulta` (é o que impede agendar um horário inventado, ver
+# `tools/agendamento.py`), mas o paciente não pode vê-lo — "09:00 com Dr. Bruno
+# (slot_id 1)" é vazamento de id de banco numa frase de atendimento.
+#
+# A remoção é determinística, no texto que sai, e não uma instrução de prompt:
+# pedir "não cite o slot_id" custaria caracteres num prompt que já degrada o
+# tool use ao crescer (ver `prompts.py`) e ainda assim falharia às vezes. Mesmo
+# raciocínio dos guardrails clínicos — filtro por padrão não muda de ideia.
+_SLOT_ID_VISIVEL = re.compile(
+    r"\s*[(\[{,—–-]?\s*slot[ _-]?id\s*(?:n[ºo°]?|[:=#])?\s*\d+\s*[)\]}]?",
+    re.IGNORECASE,
+)
+
+# Sufixo que ainda **pode** virar um `slot_id` quando o próximo fragmento
+# chegar. Sem reter esse trecho, o stream cospe "(slot_id" na tela e só o "1)"
+# seria filtrado — o vazamento aconteceria mesmo com o filtro ligado.
+#
+# O espaço e a pontuação de abertura contam como risco por conta própria: eles
+# chegam grudados na palavra anterior ("Bruno ") e, se saírem antes do "(slot",
+# a remoção acontece mas deixa o espaço duplo para trás.
+_PREFIXO_SLOT = r"\b(?:s|sl|slo|slot(?:[ _-]?(?:i|id)?)?)(?:\s*(?:n[ºo°]?|[:=#])?\s*\d*)?"
+_SLOT_ID_PARCIAL = re.compile(
+    r"(?:[\s(\[{,—–-]+(?:" + _PREFIXO_SLOT + r")?|" + _PREFIXO_SLOT + r")\s*$",
+    re.IGNORECASE,
+)
+
+
+def _sem_slot_id(texto: str) -> str:
+    """Remove menções a ``slot_id`` de um texto já completo."""
+    return _SLOT_ID_VISIVEL.sub("", texto)
+
+
+class _FiltroSlotId:
+    """Aplica :data:`_SLOT_ID_VISIVEL` a um texto que chega em pedaços.
+
+    O modelo escreve "(slot_id 1)" em três ou quatro fragmentos, então filtrar
+    fragmento a fragmento não adianta: o casamento só existe no texto montado.
+    A saída fica retida enquanto o fim do buffer puder ser o começo de uma
+    menção, e :meth:`esvaziar` libera o resto no fim do stream.
+    """
+
+    def __init__(self) -> None:
+        self._buffer = ""
+
+    def filtrar(self, fragmento: str) -> str:
+        """Devolve a parte do texto que já pode ir para a tela."""
+        self._buffer = _sem_slot_id(self._buffer + fragmento)
+        risco = _SLOT_ID_PARCIAL.search(self._buffer)
+        corte = risco.start() if risco else len(self._buffer)
+        pronto, self._buffer = self._buffer[:corte], self._buffer[corte:]
+        return pronto
+
+    def esvaziar(self) -> str:
+        """Libera o que ficou retido. O stream acabou: não vem mais dígito."""
+        pronto = _sem_slot_id(self._buffer)
+        self._buffer = ""
+        return pronto
+
 
 def detectar_alucinacao(texto: str, resultados_tools: Sequence[str]) -> list[str]:
     """Devolve horários e médicos citados no texto que nenhuma ferramenta trouxe.
@@ -208,11 +267,12 @@ class ChatService:
             # Texto já pronto e sem FAQ relevante (saudação, agradecimento,
             # pedido de esclarecimento). Uma segunda chamada só dobraria a
             # latência e abriria espaço para inventar algo que ninguém pediu.
+            texto = _sem_slot_id(decisao.texto)
             yield sse.status("")
-            for fragmento in _PALAVRAS.findall(decisao.texto):
+            for fragmento in _PALAVRAS.findall(texto):
                 yield sse.token(fragmento)
-            registro.resposta = decisao.texto
-            registro.alucinacoes = detectar_alucinacao(decisao.texto, registro.resultados_tools)
+            registro.resposta = texto
+            registro.alucinacoes = detectar_alucinacao(texto, registro.resultados_tools)
             return
 
         mensagens.append(_mensagem_assistente(decisao))
@@ -237,17 +297,30 @@ class ChatService:
         """
         yield sse.status("Escrevendo a resposta…")
         partes: list[str] = []
+        filtro = _FiltroSlotId()
         primeiro = True
         for fragmento in self._cliente.stream(mensagens, tools=schemas):
             if fragmento.tipo == "pensando":
                 # Raciocínio interno: vira sinal de atividade, nunca resposta.
                 yield sse.status("Pensando…")
                 continue
+            texto = filtro.filtrar(fragmento.texto)
+            if not texto:
+                # Fragmento inteiro retido pelo filtro: ainda não se sabe se é
+                # um `slot_id` começando. Nada vai para a tela — nem o `status`.
+                continue
             if primeiro:
                 yield sse.status("")  # apaga o indicador ao primeiro token real
                 primeiro = False
-            partes.append(fragmento.texto)
-            yield sse.token(fragmento.texto)
+            partes.append(texto)
+            yield sse.token(texto)
+
+        resto = filtro.esvaziar()
+        if resto:
+            if primeiro:
+                yield sse.status("")
+            partes.append(resto)
+            yield sse.token(resto)
 
         registro.resposta = "".join(partes)
         registro.alucinacoes = detectar_alucinacao(registro.resposta, registro.resultados_tools)

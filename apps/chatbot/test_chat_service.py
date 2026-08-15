@@ -14,7 +14,12 @@ import pytest
 
 from apps.chatbot import guardrails, sse
 from apps.chatbot.models import InteracaoChat
-from apps.chatbot.services.chat import ChatService, detectar_alucinacao
+from apps.chatbot.services.chat import (
+    ChatService,
+    _FiltroSlotId,
+    _sem_slot_id,
+    detectar_alucinacao,
+)
 from apps.chatbot.services.llm.base import (
     FragmentoStream,
     LLMIndisponivelError,
@@ -164,6 +169,59 @@ class TestDetectarAlucinacao:
 
 
 # ---------------------------------------------------------------------------
+# Remoção do slot_id da resposta
+# ---------------------------------------------------------------------------
+class TestSemSlotId:
+    """O `slot_id` é chave de banco: serve à tool, nunca ao paciente."""
+
+    @pytest.mark.parametrize(
+        "texto",
+        [
+            "09:00 com Dr. Bruno Carvalho (slot_id 1)",
+            "09:00 com Dr. Bruno Carvalho (slot_id: 1)",
+            "09:00 com Dr. Bruno Carvalho [slot_id 1]",
+            "09:00 com Dr. Bruno Carvalho - slot_id 1",
+            "09:00 com Dr. Bruno Carvalho, slot_id=1",
+            "09:00 com Dr. Bruno Carvalho (slot id nº 1)",
+            "09:00 com Dr. Bruno Carvalho (SLOT_ID 1)",
+        ],
+    )
+    def test_mencao_ao_slot_id_some_da_frase(self, texto):
+        assert _sem_slot_id(texto) == "09:00 com Dr. Bruno Carvalho"
+
+    def test_frase_sem_slot_id_fica_intacta(self):
+        frase = "Temos 09:00 e 09:30 com o Dr. Bruno Carvalho. Qual você prefere?"
+        assert _sem_slot_id(frase) == frase
+
+    def test_lista_inteira_e_limpa(self):
+        bruto = "- 09:00 com Dr. Bruno (slot_id 1)\n- 09:30 com Dr. Bruno (slot_id 4)"
+        assert _sem_slot_id(bruto) == "- 09:00 com Dr. Bruno\n- 09:30 com Dr. Bruno"
+
+
+class TestFiltroSlotIdEmStream:
+    """No stream a menção chega partida — filtrar fragmento a fragmento falha."""
+
+    def _rodar(self, fragmentos):
+        filtro = _FiltroSlotId()
+        return "".join([*(filtro.filtrar(f) for f in fragmentos), filtro.esvaziar()])
+
+    def test_mencao_partida_entre_fragmentos_nao_vaza(self):
+        fragmentos = ["09:00 ", "com ", "Dr. ", "Bruno ", "(slot", "_id ", "1)", " — ", "confirma?"]
+        assert self._rodar(fragmentos) == "09:00 com Dr. Bruno — confirma?"
+
+    def test_texto_normal_atravessa_inteiro(self):
+        fragmentos = ["Temos ", "vagas ", "na ", "segunda ", "às ", "09:00."]
+        assert self._rodar(fragmentos) == "Temos vagas na segunda às 09:00."
+
+    def test_palavra_com_s_no_fim_do_stream_nao_e_engolida(self):
+        """O 's' final fica retido por precaução; `esvaziar` tem que devolvê-lo."""
+        assert self._rodar(["Temos ", "vagas"]) == "Temos vagas"
+
+    def test_slot_id_no_ultimo_fragmento_nao_escapa_pelo_esvaziar(self):
+        assert self._rodar(["Escolha o ", "horário (slot_id 7)"]) == "Escolha o horário"
+
+
+# ---------------------------------------------------------------------------
 # ChatService
 # ---------------------------------------------------------------------------
 @pytest.mark.django_db
@@ -232,6 +290,25 @@ class TestChatService:
 
         assert _texto(pares) == "Temos vagas."
         assert ("status", "Consultando a agenda…") in pares
+
+    def test_slot_id_nao_chega_ao_paciente_nem_ao_historico(self):
+        """A tool precisa do id; a frase, não. E o registro alimenta o histórico
+        do próximo turno — guardar o id sujo faria o modelo repeti-lo."""
+        cliente = FakeLLMClient(
+            respostas=[RespostaLLM(tool_calls=[ToolCall(id="c1", nome="buscar_slots")])],
+            fragmentos=[
+                FragmentoStream.token("09:00 com Dr. Bruno "),
+                FragmentoStream.token("(slot"),
+                FragmentoStream.token("_id 1)"),
+                FragmentoStream.token(". Confirma?"),
+            ],
+        )
+        conversa = uuid.uuid4()
+        servico = ChatService(cliente=cliente, registry=ToolRegistry([_ToolFalsa()]))
+        pares = _eventos(servico.responder(pergunta="Tem horário?", conversa_id=conversa))
+
+        assert _texto(pares) == "09:00 com Dr. Bruno. Confirma?"
+        assert "slot_id" not in InteracaoChat.objects.get(conversa_id=conversa).resposta
 
     def test_sempre_termina_com_close(self):
         """Sem `close`, o EventSource reconecta em ~3s e reexecuta o turno."""
