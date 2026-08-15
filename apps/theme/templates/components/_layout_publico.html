@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% comment %}
+  Layout do site público da clínica — [S4-4].
+
+  ATENÇÃO: o `{% templatetag openblock %} extends {% templatetag closeblock %}`
+  precisa ser a **primeira tag** do arquivo. Este comentário já esteve acima
+  dele no `_layout.html` e o Django recusava o template inteiro com
+  `TemplateSyntaxError: must be the first tag`.
+
+  Por que um layout novo em vez de reaproveitar `components/_layout.html`:
+  aquele prende o conteúdo num `max-w-7xl px-4 py-8`, e o hero desta landing
+  sangra até a borda com o próprio `clamp()` de padding. Além disso o chat
+  depende do `_layout.html`, então mexer nele arriscaria uma página que já está
+  no ar. Aqui estendemos `base.html` direto e sobrescrevemos `content`.
+
+  Blocos expostos:
+    nav_itens   — os links do menu (a landing usa âncoras; páginas internas
+                  usarão URLs de verdade)
+    main        — o conteúdo da página
+    rodape      — o rodapé de 4 colunas, sobrescrevível
+
+  O menu responsivo usa `<details>`/`<summary>` nativo: sem JavaScript, sem
+  dependência, e o teclado já navega de graça. Coerente com a postura do repo
+  (ver o comentário do `chat.html` sobre não trazer CDN).
+{% endcomment %}
+
+{% block content %}
+<div style="min-height: 100vh; background: var(--color-bg);">
+
+  {# ── Navegação ───────────────────────────────────────────────────────── #}
+  <nav class="nav nav-publica"
+       style="position: sticky; top: 0; z-index: 30; background: var(--color-bg); padding-inline: clamp(20px, 5vw, 72px); gap: 30px;">
+    <a href="{% url 'site_publico:home' %}" class="nav-brand" style="white-space: nowrap; color: inherit;">{{ clinica.nome }}</a>
+
+    {% comment %}
+      Acima de 860px: os links soltos na barra. O `display` NÃO pode vir em
+      style inline — estilo inline vence a folha, e a media query que esconde
+      este bloco no estreito nunca conseguiria apagá-lo. Fica no styles.css.
+    {% endcomment %}
+    <div class="nav-links">
+      {% block nav_itens %}
+        <a href="{% url 'site_publico:home' %}#especialidades" style="white-space: nowrap;">Especialidades</a>
+        <a href="{% url 'site_publico:home' %}#exames" style="white-space: nowrap;">Exames</a>
+        <a href="{% url 'site_publico:home' %}#corpo-clinico" style="white-space: nowrap;">Corpo clínico</a>
+        <a href="{% url 'site_publico:home' %}#agendar" style="white-space: nowrap;">Agendar</a>
+      {% endblock %}
+      <a href="{% url 'site_publico:home' %}#agendar" class="btn btn-primary" style="white-space: nowrap;">Agendar consulta</a>
+    </div>
+
+    {# Abaixo de 860px: os mesmos links dentro de um disclosure nativo. #}
+    <details class="nav-menu">
+      <summary aria-label="Abrir o menu">
+        <span aria-hidden="true">Menu</span>
+        <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+          <path d="M224 128a8 8 0 0 1-8 8H40a8 8 0 0 1 0-16h176a8 8 0 0 1 8 8ZM40 72h176a8 8 0 0 0 0-16H40a8 8 0 0 0 0 16Zm176 112H40a8 8 0 0 0 0 16h176a8 8 0 0 0 0-16Z"></path>
+        </svg>
+      </summary>
+      <div class="nav-menu-painel">
+        {% block nav_itens_mobile %}
+          <a href="{% url 'site_publico:home' %}#especialidades">Especialidades</a>
+          <a href="{% url 'site_publico:home' %}#exames">Exames</a>
+          <a href="{% url 'site_publico:home' %}#corpo-clinico">Corpo clínico</a>
+          <a href="{% url 'site_publico:home' %}#agendar">Agendar</a>
+        {% endblock %}
+        <a href="{% url 'site_publico:home' %}#agendar" class="btn btn-primary" style="margin-top: var(--space-2);">Agendar consulta</a>
+      </div>
+    </details>
+  </nav>
+
+  {# ── Conteúdo ────────────────────────────────────────────────────────── #}
+  <main id="conteudo">
+    {% block main %}{% endblock %}
+  </main>
+
+  {# ── Rodapé ──────────────────────────────────────────────────────────── #}
+  {% block rodape %}
+  <footer style="max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 84px;">
+    <div class="regra-fina" style="margin-bottom: 28px;"></div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 28px; font-size: 15.5px; line-height: 28px;">
+      <div>
+        <p class="sobrelinha" style="margin-bottom: 6px;">Endereço</p>
+        <p style="margin: 0;">{{ clinica.endereco_linha1 }}<br>{{ clinica.endereco_linha2 }}<br>{{ clinica.referencia }}</p>
+      </div>
+      <div>
+        <p class="sobrelinha" style="margin-bottom: 6px;">Horários</p>
+        <p style="margin: 0;">{{ clinica.horario_semana }}<br>{{ clinica.horario_sabado }}<br>{{ clinica.horario_domingo }}</p>
+      </div>
+      <div>
+        <p class="sobrelinha" style="margin-bottom: 6px;">Convênios</p>
+        <p style="margin: 0;">{{ clinica.convenios_linha1 }}<br>{{ clinica.convenios_linha2 }}<br>{{ clinica.estacionamento }}</p>
+      </div>
+      <div>
+        <p class="sobrelinha" style="margin-bottom: 6px;">Contato</p>
+        <p style="margin: 0;">
+          {{ clinica.telefone }}<br>
+          WhatsApp {{ clinica.whatsapp }}<br>
+          <button type="button" class="link-acao" data-abrir-chat>Assistente da clínica</button>
+        </p>
+      </div>
+    </div>
+  </footer>
+  {% endblock %}
+
+  {% include "components/_chat_flutuante.html" %}
+</div>
+{% endblock %}
+
+{% comment %}
+  As regras do menu (`.nav-menu`, `.nav-links`) moram no styles.css: a folha
+  única é a fonte da verdade do visual, e um `<style>` aqui viajaria em toda
+  página sem passar pelo build.
+
+  Comentário em `{% templatetag openblock %} comment {% templatetag closeblock %}`
+  e não em `{# … #}`: o comentário de cerquilha do Django é de **uma linha só**
+  — o lexer não casa quebra de linha —, então a versão multilinha vazaria como
+  texto. Aqui não apareceria (texto fora de bloco num template que estende é
+  descartado), mas o mesmo erro numa página comum imprime na tela.
+{% endcomment %}

@@ -259,6 +259,14 @@ AUTH_PASSWORD_VALIDATORS = [
 # ``manage.py check`` puro não dispara o erro. A S1-8 entrega o model real.
 AUTH_USER_MODEL = "core.Usuario"
 
+# O default do Django é ``/accounts/login/``, rota que este projeto **não** tem:
+# a única tela de login é a do Admin (ADR-0005). Sem isto, qualquer view com
+# ``@login_required`` — a grade da agenda `[S4-4]` é a primeira — manda o
+# usuário deslogado para um 404. Aponta para o nome da rota, e não para o
+# caminho, para que um eventual remapeamento do prefixo do Admin acompanhe.
+LOGIN_URL = "admin:login"
+LOGIN_REDIRECT_URL = "agenda:consultas"
+
 
 # ---------------------------------------------------------------------------
 # Internacionalização

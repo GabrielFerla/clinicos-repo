@@ -53,7 +53,7 @@
 
 ### Frontend base
 - [x] **S1-17** Configuração de Tailwind via `django-tailwind` · **FRONT** · 3h
-- [ ] **S1-18** Identidade visual: paleta, tipografia, design tokens · **DESIGN** · 6h
+- [x] **S1-18** Identidade visual: paleta, tipografia, design tokens · **DESIGN** · 6h
 - [ ] **S1-19** Logo placeholder do ClinicOS (versão definitiva no MVP2) · **DESIGN** · 2h
 - [ ] **S1-20** Wireframes de baixa fidelidade de todas as telas no Figma · **DESIGN** · 10h
 

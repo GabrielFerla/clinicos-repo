@@ -5,10 +5,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}ClinicOS{% endblock %}</title>
+  <meta name="description" content="{% block description %}Clínica oftalmológica: consulta, exames de imagem e cinco subespecialidades no mesmo lugar.{% endblock %}">
+
+  {# Open Graph — o mínimo do [S4-17]. O `og:image` entra quando houver arte. #}
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:site_name" content="ClinicOS">
+  <meta property="og:title" content="{% block og_title %}ClinicOS{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Clínica oftalmológica: consulta, exames de imagem e cinco subespecialidades no mesmo lugar.{% endblock %}">
+
   {% tailwind_css %}
   {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-gray-50 text-gray-900 antialiased">
+<body>
+  {# Pulo para o conteúdo [S4-19]: invisível até receber foco pelo teclado. #}
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
   {% block content %}{% endblock %}
   {% block extra_body %}{% endblock %}
 </body>

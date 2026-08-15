@@ -80,3 +80,5 @@ Não crie ADR para escolhas óbvias ou triviais (ex: "usar HTTPS", "armazenar se
 | [0002](0002-django-em-vez-de-laravel.md) | Backend: Django em vez de Laravel | ✅ Accepted | 2026-05-17 |
 | [0003](0003-htmx-sem-vue.md) | Frontend: HTMX + Alpine.js, sem Vue | ✅ Accepted | 2026-05-17 |
 | [0004](0004-provedor-embeddings.md) | Provedor de embeddings | 🟡 Proposed | 2026-05-17 |
+| [0005](0005-django-admin-para-crm.md) | Django Admin (unfold) como UI do CRM no MVP1 | 🟢 Decided | 2026-05-23 |
+| [0006](0006-agenda-custom.md) | Tela custom para a grade da agenda | 🟡 Proposed | 2026-08-15 |

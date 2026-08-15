@@ -1,0 +1,175 @@
+{% extends "components/_layout_admin.html" %}
+{% comment %}
+  Consultas do dia — a tela que a recepção deixa aberta `[S4-4]`.
+
+  O mesmo dia em duas leituras: a **grade** por horário, que mostra os buracos
+  (é o "livre" que importa quando alguém liga pedindo encaixe), e a **listagem**
+  tabular, que mostra a procedência. As duas leem da mesma `linhas`, já filtrada
+  na view.
+
+  Todo filtro é um link com querystring — nenhum JavaScript nesta página. O
+  estado mora na URL, então a recepção manda o dia filtrado para a colega e o
+  botão voltar do navegador funciona.
+
+  As contagens da barra lateral falam sempre do dia INTEIRO, mesmo com filtro
+  aplicado: números que zerassem junto com o filtro não diriam para onde ir em
+  seguida.
+{% endcomment %}
+
+{% block title %}Consultas · {{ titulo_dia }} — ClinicOS{% endblock %}
+
+{% block main %}
+<div style="max-width: 1440px; margin: 0 auto; padding: 42px clamp(20px, 4vw, 48px) 84px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 42px;">
+
+  <div style="flex: 1 1 640px; min-width: 0;">
+
+    <p class="sobrelinha" style="margin-bottom: 14px;">
+      <a href="{% url 'admin:index' %}">Início</a> › Agenda › Consultas
+    </p>
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; flex-wrap: wrap; padding: 0 0 14px;">
+      <h1 style="margin: 0; font-size: 34px; line-height: 1.1;">{{ titulo_dia }}</h1>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        {% for aba in abas %}
+          <a href="?dia={{ aba.indice }}"
+             class="btn {% if aba.ativa %}btn-primary{% else %}btn-ghost{% endif %}"
+             style="font-size: 15px;"
+             {% if aba.ativa %}aria-current="page"{% endif %}>{{ aba.rotulo }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="regra-fina"></div>
+
+    {# ── Resumo do dia ──────────────────────────────────────────────────── #}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(50%, 150px), 1fr)); gap: 28px; padding: 28px 0 42px;">
+      {% for r in resumo %}
+        <div>
+          <p style="margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: 40px; line-height: 1;">{{ r.valor }}</p>
+          <p class="sobrelinha" style="margin: 10px 0 0; line-height: 20px;">{{ r.rotulo }}</p>
+        </div>
+      {% endfor %}
+    </div>
+
+    {# ── Busca e ações ──────────────────────────────────────────────────── #}
+    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding-bottom: 28px;">
+      <form method="get" style="display: flex; gap: 10px; flex: 1 1 320px;">
+        {# O dia e os filtros viajam junto, senão buscar zeraria o recorte. #}
+        <input type="hidden" name="dia" value="{{ parametros.dia }}">
+        {% if parametros.status %}<input type="hidden" name="status" value="{{ parametros.status }}">{% endif %}
+        {% if parametros.origem %}<input type="hidden" name="origem" value="{{ parametros.origem }}">{% endif %}
+        {% if parametros.medico %}<input type="hidden" name="medico" value="{{ parametros.medico }}">{% endif %}
+        <input class="input" type="search" name="q" value="{{ termo }}"
+               placeholder="Buscar por paciente ou médico"
+               aria-label="Buscar por paciente ou médico"
+               style="flex: 1 1 auto; font-size: 16px; padding: 10px 14px;">
+        <button type="submit" class="btn btn-secondary">Buscar</button>
+      </form>
+      <a href="{% url 'admin:agenda_agendaslot_changelist' %}" class="btn btn-ghost">Ver slots livres</a>
+      <a href="{% url 'admin:agenda_consulta_add' %}" class="btn btn-primary">Nova consulta</a>
+    </div>
+
+    {# ── Grade do dia ───────────────────────────────────────────────────── #}
+    <span class="sobrelinha">Grade do dia</span>
+    <div style="padding-bottom: 42px;">
+      {% for faixa in grade %}
+        <div style="display: grid; grid-template-columns: 78px 1fr; gap: 20px; align-items: start; padding: 10px 0; border-top: 1px solid var(--color-divider);">
+          <span style="font-family: var(--font-heading); font-weight: 600; font-size: 19px; line-height: 28px; {% if faixa.vazio %}color: color-mix(in srgb, var(--color-text) 40%, transparent);{% endif %}">{{ faixa.hora|time:"H:i" }}</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px 20px;">
+            {% if faixa.vazio %}
+              <span style="font-size: 15.5px; line-height: 28px; font-style: italic; color: color-mix(in srgb, var(--color-text) 45%, transparent);">livre</span>
+            {% endif %}
+            {% for c in faixa.itens %}
+              <span style="display: inline-flex; align-items: baseline; gap: 10px; font-size: 15.5px; line-height: 28px;">
+                <a href="{% url 'admin:agenda_consulta_change' c.pk %}" style="font-weight: 600;">{{ c.paciente.nome }}</a>
+                <span style="color: color-mix(in srgb, var(--color-text) 70%, transparent);">{{ c.medico.nome }}</span>
+                <span class="{{ c.classe_tag }}">{{ c.get_status_display }}</span>
+              </span>
+            {% endfor %}
+          </div>
+        </div>
+      {% empty %}
+        <p class="text-muted" style="padding: 20px 0;">Nenhum slot gerado para este dia. Ver as regras de agenda no Admin.</p>
+      {% endfor %}
+    </div>
+
+    {# ── Listagem ───────────────────────────────────────────────────────── #}
+    <span class="sobrelinha">Listagem · ordenada por horário</span>
+    <table class="table" style="font-size: 16px;">
+      <thead>
+        <tr>
+          <th>Paciente</th>
+          <th>Médico</th>
+          <th>Data</th>
+          <th>Hora</th>
+          <th>Status</th>
+          <th>Origem</th>
+          <th>Criado em</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in consultas %}
+          <tr>
+            <td><a href="{% url 'admin:agenda_consulta_change' c.pk %}">{{ c.paciente.nome }}</a></td>
+            <td style="color: color-mix(in srgb, var(--color-text) 78%, transparent);">{{ c.medico.nome }}</td>
+            <td style="white-space: nowrap;">{{ c.slot.data|date:"d/m/Y" }}</td>
+            <td style="white-space: nowrap;">{{ c.slot.hora_inicio|time:"H:i" }}</td>
+            <td><span class="{{ c.classe_tag }}">{{ c.get_status_display }}</span></td>
+            <td style="color: color-mix(in srgb, var(--color-text) 78%, transparent);">{{ c.get_origem_display }}</td>
+            <td style="color: color-mix(in srgb, var(--color-text) 60%, transparent); white-space: nowrap;">{{ c.criado_em|date:"d/m H:i" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="text-muted" style="padding: 20px 10px;">Nenhuma consulta com esse recorte.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 20px; padding-top: 20px; flex-wrap: wrap; font-size: 13px; line-height: 24px; color: color-mix(in srgb, var(--color-text) 70%, transparent);">
+      <span>{{ contagem }}</span>
+      <span>O médico vem de <code>slot.medico</code> e é somente leitura · criar reserva o slot pelo AgendamentoService</span>
+    </div>
+  </div>
+
+  {# ── Barra lateral ───────────────────────────────────────────────────── #}
+  <aside style="flex: 1 1 300px; max-width: 340px; display: flex; flex-direction: column; gap: 42px;">
+
+    <div>
+      <span class="sobrelinha">Filtrar o dia</span>
+      {% for grupo in filtros %}
+        <div style="padding-bottom: 28px;">
+          <h2 style="margin: 0 0 8px; font-size: 19px; line-height: 28px;">{{ grupo.titulo }}</h2>
+          {% for o in grupo.opcoes %}
+            <p style="display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 15.5px; line-height: 28px;">
+              <a href="{{ o.query }}"
+                 style="color: {% if o.ativo %}var(--color-accent-700){% else %}var(--color-text){% endif %}; font-weight: {% if o.ativo %}600{% else %}400{% endif %};"
+                 {% if o.ativo %}aria-current="true"{% endif %}>{{ o.rotulo }}</a>
+              <span class="conduto" style="min-width: 20px;"></span>
+              <span style="font-family: var(--font-heading); font-weight: 600; font-size: 16px; {% if o.ativo %}color: var(--color-accent-700);{% endif %}">{{ o.contagem }}</span>
+            </p>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <div>
+      <span class="sobrelinha">Vindas do chat</span>
+      <h2 style="margin: 0 0 8px; font-size: 24px; line-height: 28px;">{{ chat_titulo }}</h2>
+      <p style="margin: 0; font-size: 15.5px; line-height: 28px; color: color-mix(in srgb, var(--color-text) 78%, transparent);">
+        Consultas com origem Chatbot nasceram de uma conversa no site: o lead entra no funil, a reserva do slot passa pelo AgendamentoService e o turno fica registrado na auditoria.
+      </p>
+      <p style="margin: 14px 0 0; font-size: 15.5px; line-height: 28px;">
+        <a href="{% url 'admin:chatbot_interacaochat_changelist' %}">Abrir auditoria do chat</a> ·
+        <a href="{% url 'admin:crm_lead_changelist' %}">funil de leads</a>
+      </p>
+    </div>
+
+    <div>
+      <span class="sobrelinha">Atalhos da recepção</span>
+      <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start;">
+        <a href="{% url 'admin:agenda_agendaslot_changelist' %}" style="font-size: 15.5px; line-height: 28px;">Bloquear horário de um médico</a>
+        <a href="{% url 'admin:agenda_agendaregra_changelist' %}" style="font-size: 15.5px; line-height: 28px;">Regras semanais de agenda</a>
+        <a href="{% url 'admin:crm_paciente_changelist' %}" style="font-size: 15.5px; line-height: 28px;">Cadastro de paciente (CPF cifrado)</a>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}
