@@ -32,9 +32,11 @@
        style="position: sticky; top: 0; z-index: 30; background: var(--color-bg); padding-inline: clamp(20px, 5vw, 72px); gap: 30px;">
     <a href="{% url 'site_publico:home' %}" class="nav-brand" style="white-space: nowrap; color: inherit;">{{ clinica.nome }}</a>
 
-    {# Acima de 860px: os links soltos na barra. O `display` NÃO pode vir em
-       style inline — estilo inline vence a folha, e a media query que esconde
-       este bloco no estreito nunca conseguiria apagá-lo. Fica no styles.css. #}
+    {% comment %}
+      Acima de 860px: os links soltos na barra. O `display` NÃO pode vir em
+      style inline — estilo inline vence a folha, e a media query que esconde
+      este bloco no estreito nunca conseguiria apagá-lo. Fica no styles.css.
+    {% endcomment %}
     <div class="nav-links">
       {% block nav_itens %}
         <a href="{% url 'site_publico:home' %}#especialidades" style="white-space: nowrap;">Especialidades</a>

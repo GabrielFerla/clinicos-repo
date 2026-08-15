@@ -92,6 +92,23 @@ def test_as_chapas_repetidas_ficam_fora_do_leitor_de_tela(client: Client) -> Non
     assert 'class="plate plate-y" aria-hidden="true"' in corpo
 
 
+def test_nenhum_comentario_de_template_vaza_para_a_pagina(client: Client) -> None:
+    """O `{# … #}` do Django é de **uma linha só** — em várias, vira texto.
+
+    O lexer não casa quebra de linha dentro do comentário de cerquilha, então a
+    versão multilinha é renderizada literalmente. Aconteceu de verdade nesta
+    landing: um comentário de três linhas sobre a nav apareceu impresso ao lado
+    da marca, no topo da página. Nenhum teste de conteúdo pega isso — todos
+    verificam o que **deve** estar lá, e o vazamento é algo a mais.
+    """
+    corpo = client.get(reverse("site_publico:home")).content.decode()
+
+    assert "{#" not in corpo
+    assert "#}" not in corpo
+    # E as tags de bloco também não podem sobrar sem processar.
+    assert "{%" not in corpo
+
+
 def test_o_assistente_flutuante_aponta_para_o_endpoint_real(client: Client) -> None:
     """O painel usa o chatbot que já existe — não uma cópia local."""
     corpo = client.get(reverse("site_publico:home")).content.decode()
