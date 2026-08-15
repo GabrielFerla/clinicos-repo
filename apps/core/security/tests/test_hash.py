@@ -1,7 +1,8 @@
-"""Testes unitários do helper ``apps.core.security.hash`` (S1-15).
+"""Testes unitários do helper ``apps.core.security.hash`` (S1-15, S2-9).
 
-Cobre ``normalize_cpf``, ``cpf_hash`` e ``verify_cpf_hash``:
+Cobre ``normalize_cpf``, ``validar_cpf``, ``cpf_hash`` e ``verify_cpf_hash``:
 - normalização de formatos válidos / inválidos;
+- dígitos verificadores pelo algoritmo oficial (S2-9);
 - determinismo do hash com mesma chave/pepper;
 - detecção de mudança no pepper;
 - comparação em tempo constante.
@@ -16,7 +17,7 @@ import hmac
 
 import pytest
 
-from apps.core.security.hash import cpf_hash, normalize_cpf, verify_cpf_hash
+from apps.core.security.hash import cpf_hash, normalize_cpf, validar_cpf, verify_cpf_hash
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -108,6 +109,85 @@ def test_normalize_cpf_invalid_raises_value_error(raw: str) -> None:
 def test_normalize_cpf_wrong_type_raises_type_error(bad: object) -> None:
     with pytest.raises(TypeError):
         normalize_cpf(bad)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# validar_cpf — dígitos verificadores (S2-9)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "cpf",
+    [
+        "12345678909",  # DV1 cai no caso `resto == 10` → 0
+        "98765432100",  # os dois verificadores são 0
+        "11144477735",
+        "01234567890",  # começa com zero — não pode ser tratado como número
+    ],
+)
+def test_validar_cpf_aceita_verificadores_corretos(cpf: str) -> None:
+    assert validar_cpf(cpf) is True
+
+
+def test_validar_cpf_aceita_entrada_com_mascara() -> None:
+    assert validar_cpf("123.456.789-09") is True
+
+
+@pytest.mark.parametrize(
+    "cpf",
+    [
+        "12345678900",  # segundo DV errado (o correto é 9)
+        "12345678919",  # primeiro DV errado (o correto é 0)
+        "98765432101",
+        "11144477736",
+    ],
+)
+def test_validar_cpf_recusa_verificador_errado(cpf: str) -> None:
+    assert validar_cpf(cpf) is False
+
+
+@pytest.mark.parametrize(
+    "cpf",
+    [
+        "00000000000",
+        "11111111111",
+        "22222222222",
+        "33333333333",
+        "44444444444",
+        "55555555555",
+        "66666666666",
+        "77777777777",
+        "88888888888",
+        "99999999999",
+    ],
+)
+def test_validar_cpf_recusa_digitos_repetidos(cpf: str) -> None:
+    """Passam na aritmética dos verificadores, mas não são CPFs de ninguém."""
+    assert validar_cpf(cpf) is False
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "",
+        "abc",
+        "1234567890",  # 10 dígitos
+        "123456789012",  # 12 dígitos
+        "123.456.789-0X",
+        None,
+        b"12345678909",
+        12345678909,
+    ],
+)
+def test_validar_cpf_recusa_entrada_malformada_sem_levantar(bad: object) -> None:
+    """Contrato de booleano: quem valida entrada de usuário não quer try/except."""
+    assert validar_cpf(bad) is False  # type: ignore[arg-type]
+
+
+def test_validar_cpf_nao_confia_apenas_no_tamanho() -> None:
+    """Sanidade: ``normalize_cpf`` aceita o que ``validar_cpf`` recusa."""
+    assert normalize_cpf("111.111.111-11") == "11111111111"
+    assert validar_cpf("111.111.111-11") is False
 
 
 # ---------------------------------------------------------------------------
