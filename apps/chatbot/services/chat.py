@@ -72,15 +72,16 @@ _PALAVRAS = re.compile(r"\S+\s*")
 _HORARIO = re.compile(r"\b(?:[01]?\d|2[0-3])[:h][0-5]\d\b")
 _MEDICO = re.compile(r"\bDra?\.\s*[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÀ-ÿ]+(?:\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÀ-ÿ]+)*")
 
-# O `slot_id` é dado interno: o modelo **precisa** dele para chamar
-# `criar_lead_e_consulta` (é o que impede agendar um horário inventado, ver
-# `tools/agendamento.py`), mas o paciente não pode vê-lo — "09:00 com Dr. Bruno
-# (slot_id 1)" é vazamento de id de banco numa frase de atendimento.
+# Rede de segunda linha contra id de banco na conversa — "09:00 com Dr. Bruno
+# (slot_id 1)". A de primeira linha é o modelo não receber id nenhum: nem
+# `buscar_slots` devolve `slot_id`, nem `criar_lead_e_consulta` aceita, desde
+# `[S5-12]` (ver `tools/agendamento.py`). Um dado que não está no contexto não
+# vaza; este filtro só cobre o caso de o modelo inventar a menção sozinho.
 #
-# A remoção é determinística, no texto que sai, e não uma instrução de prompt:
-# pedir "não cite o slot_id" custaria caracteres num prompt que já degrada o
-# tool use ao crescer (ver `prompts.py`) e ainda assim falharia às vezes. Mesmo
-# raciocínio dos guardrails clínicos — filtro por padrão não muda de ideia.
+# Continua sendo remoção determinística no texto que sai, e não instrução de
+# prompt: pedir "não cite o slot_id" custaria caracteres num prompt que já
+# degrada o tool use ao crescer (ver `prompts.py`) e ainda assim falharia às
+# vezes. Mesmo raciocínio dos guardrails clínicos — filtro não muda de ideia.
 _SLOT_ID_VISIVEL = re.compile(
     r"\s*[(\[{,—–-]?\s*slot[ _-]?id\s*(?:n[ºo°]?|[:=#])?\s*\d+\s*[)\]}]?",
     re.IGNORECASE,
@@ -119,10 +120,16 @@ class _FiltroSlotId:
 
     def filtrar(self, fragmento: str) -> str:
         """Devolve a parte do texto que já pode ir para a tela."""
-        self._buffer = _sem_slot_id(self._buffer + fragmento)
+        # A ordem destas linhas é o conserto de um vazamento real: remover
+        # **antes** de separar o trecho em risco apagava "(slot_id 4" no
+        # fragmento em que o primeiro dígito chegava, e o resto do número saía
+        # como texto solto — "08:00 com Dr. Bruno Carvalho31)" na tela do
+        # paciente. Só é filtrado o que já não pode crescer; o pedaço que ainda
+        # pode virar uma menção espera o próximo fragmento.
+        self._buffer += fragmento
         risco = _SLOT_ID_PARCIAL.search(self._buffer)
         corte = risco.start() if risco else len(self._buffer)
-        pronto, self._buffer = self._buffer[:corte], self._buffer[corte:]
+        pronto, self._buffer = _sem_slot_id(self._buffer[:corte]), self._buffer[corte:]
         return pronto
 
     def esvaziar(self) -> str:

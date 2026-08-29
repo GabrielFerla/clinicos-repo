@@ -220,6 +220,14 @@ class TestFiltroSlotIdEmStream:
     def test_slot_id_no_ultimo_fragmento_nao_escapa_pelo_esvaziar(self):
         assert self._rodar(["Escolha o ", "horário (slot_id 7)"]) == "Escolha o horário"
 
+    def test_numero_que_chega_digito_a_digito_nao_sobra_na_tela(self):
+        """O vazamento visto em produção: o primeiro dígito fechava a menção, ela
+        era removida ali, e os dígitos seguintes saíam soltos — o paciente lia
+        "08:00 com Dr. Bruno Carvalho31)"."""
+        fragmentos = ["08:00 com Dr. Bruno Carvalho", " (slot_id ", "4", "3", "1", ")", " hoje"]
+
+        assert self._rodar(fragmentos) == "08:00 com Dr. Bruno Carvalho hoje"
+
 
 # ---------------------------------------------------------------------------
 # ChatService

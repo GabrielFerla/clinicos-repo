@@ -8,12 +8,21 @@ os dois arquivos deixa a superfície de risco visível no ``ls``.
 
 O que impede o modelo de inventar um agendamento
 ------------------------------------------------
-Nada nesta ferramenta aceita horário em texto livre. O único jeito de escolher
-uma vaga é o ``slot_id`` que ``buscar_slots`` devolveu — mesmo espírito do
-``enum`` de especialidades daquela tool: **restringir o vocabulário no schema é
-a defesa mais eficaz contra parâmetro inventado por modelo pequeno**, mais do
-que qualquer instrução no prompt. Um "quero quinta às 15h" não tem como virar
-consulta sem passar por uma consulta real à agenda.
+A vaga é escolhida por ``data``, ``hora`` e ``medico`` — os mesmos três campos
+que ``buscar_slots`` devolveu e que o paciente fala em voz alta —, e quem
+traduz isso em PK é **o servidor**, numa consulta a ``AGENDA_SLOT`` restrita a
+``status=LIVRE``. Nada aqui interpreta linguagem natural de tempo: data e hora
+passam só nos formatos fixos de :data:`FORMATOS_DATA` e :data:`FORMATOS_HORA`,
+então "quinta que vem" é recusado; e o que passa ainda tem que casar com uma
+vaga real e livre. Sem casar, a ferramenta recusa com uma frase que o chatbot
+consegue falar — nunca com um agendamento aproximado.
+
+Até `[S5-12]` o argumento era o ``slot_id`` cru, e a defesa era o schema não
+aceitar texto. Funcionava, ao custo de pôr uma PK de banco no vocabulário do
+modelo: ele transcrevia o número para o paciente ("(slot_id 431)") e chegava a
+pedir que o paciente *informasse* o id ao escolher. Identificar a vaga pelo que
+já está na tela remove o dado da conversa em vez de tentar filtrá-lo depois —
+ver o comentário em ``consultas.py``, onde o campo deixou de ser devolvido.
 
 A escrita em si não acontece aqui: quem cria a ``Consulta`` é o
 ``AgendamentoService`` `[S3-7]`, com transação e lock. Esta ferramenta traduz —
@@ -25,12 +34,14 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
+import unicodedata
 import uuid
 from typing import Any
 
 from django.db import IntegrityError, transaction
 
-from apps.agenda.models import Consulta
+from apps.agenda.models import AgendaSlot, Consulta
 from apps.agenda.services.agendamento import AgendamentoError, AgendamentoService
 from apps.core.security.hash import validar_cpf
 from apps.crm.models import Lead, Paciente
@@ -46,8 +57,23 @@ logger = logging.getLogger(__name__)
 # recusada, porque adivinhar se "03/04" é março ou abril erraria em silêncio.
 FORMATOS_DATA = ("%d/%m/%Y", "%Y-%m-%d")
 
-MSG_SLOT_INVALIDO = (
-    "Antes de agendar, mostre os horários disponíveis e peça para o paciente escolher um deles."
+# ``hora`` chega como o modelo escreveu. "08:00" é o que ``buscar_slots``
+# devolve e o que ele copia na maioria das vezes; as outras formas são as que
+# aparecem quando ele reescreve com as palavras do paciente ("8h", "8h30").
+FORMATOS_HORA = ("%H:%M", "%H:%M:%S", "%Hh%M", "%Hh", "%H")
+
+# Títulos e preposições saem antes de comparar nome de médico: o cadastro tem
+# "Dra. Ana Lima" e o modelo manda tanto isso quanto "Ana Lima" ou "Dra Ana".
+TITULOS_MEDICO = frozenset({"dr", "dra", "drs", "doutor", "doutora"})
+LIGACOES_NOME = frozenset({"de", "da", "do", "das", "dos", "e"})
+
+MSG_HORARIO_ILEGIVEL = (
+    "Não entendi a data e a hora escolhidas. Informe as duas como apareceram na "
+    "lista de horários: data em DD/MM/AAAA e hora em HH:MM."
+)
+MSG_HORARIO_INDISPONIVEL = (
+    "Esse horário não está mais disponível. Mostre outros horários livres e peça para o "
+    "paciente escolher um deles."
 )
 MSG_DATA_INVALIDA = (
     "Não entendi a data de nascimento. Peça no formato dia/mês/ano, por exemplo 17/05/1980."
@@ -62,17 +88,22 @@ class CriarLeadEConsultaTool(BaseTool):
     name = "criar_lead_e_consulta"
     # Esta `description` é o guardrail que mais importa nesta ferramenta: é ela
     # que o modelo lê ao decidir entre "ainda estou coletando dados" e "posso
-    # gravar". As duas frases sobre `slot_id` e sobre dado faltando existem para
-    # impedir uso prematuro — o erro clássico é chamar com os campos em branco
-    # logo depois de o paciente dizer "quero marcar".
+    # gravar". As frases sobre copiar o horário e sobre dado faltando existem
+    # para impedir uso prematuro — o erro clássico é chamar com os campos em
+    # branco logo depois de o paciente dizer "quero marcar".
+    #
+    # A frase sobre não pedir número ao paciente é o que sobrou do bug do
+    # `slot_id`: o modelo pedia o id porque o schema pedia o id. Sem campo de
+    # id, ele não tem o que pedir; a frase é só o cinto de segurança.
     description = (
         "Agenda a consulta de verdade. É a única ferramenta que grava algo, "
         "então use apenas no final: quando o paciente JÁ escolheu um dos "
-        "horários que buscar_slots mostrou e JÁ informou nome, CPF, data de "
-        "nascimento e telefone. O slot_id precisa ser exatamente um dos "
-        "devolvidos por buscar_slots — nunca invente esse número nem agende um "
-        "horário que você não mostrou. Se faltar algum dado, ou se o paciente "
-        "ainda não escolheu o horário, não chame esta ferramenta: pergunte."
+        "horários que você mostrou e JÁ informou nome, CPF, data de nascimento "
+        "e telefone. Copie data, hora e médico de um horário que você mostrou a "
+        "ele — nunca invente e nunca agende horário que não foi mostrado. O "
+        "paciente escolhe falando o horário: nunca peça a ele número, código "
+        "nem id. Se faltar algum dado, ou se ele ainda não escolheu o horário, "
+        "não chame esta ferramenta: pergunte."
     )
     input_schema: dict[str, Any] = {
         "type": "object",
@@ -93,11 +124,25 @@ class CriarLeadEConsultaTool(BaseTool):
                 "type": "string",
                 "description": "Telefone de contato com DDD.",
             },
-            "slot_id": {
-                "type": "integer",
+            "data": {
+                "type": "string",
                 "description": (
-                    "Número do horário escolhido, copiado do campo slot_id que "
-                    "buscar_slots devolveu. Não aceita data nem hora em texto."
+                    "Data do horário escolhido, no formato DD/MM/AAAA, copiada "
+                    "da lista de horários que você mostrou ao paciente."
+                ),
+            },
+            "hora": {
+                "type": "string",
+                "description": (
+                    "Hora do horário escolhido, no formato HH:MM, copiada da "
+                    "mesma lista. Não aceita 'de manhã' nem 'quinta que vem'."
+                ),
+            },
+            "medico": {
+                "type": "string",
+                "description": (
+                    "Nome do médico daquele horário, como apareceu na lista. "
+                    "Sem ele não há como saber qual dos médicos do horário é."
                 ),
             },
             "email": {
@@ -105,7 +150,7 @@ class CriarLeadEConsultaTool(BaseTool):
                 "description": "E-mail do paciente, se ele informar. Opcional.",
             },
         },
-        "required": ["nome", "cpf", "data_nascimento", "telefone", "slot_id"],
+        "required": ["nome", "cpf", "data_nascimento", "telefone", "data", "hora", "medico"],
     }
 
     def __init__(self, conversa_id: uuid.UUID | str | None = None) -> None:
@@ -125,7 +170,9 @@ class CriarLeadEConsultaTool(BaseTool):
         cpf: str = "",
         data_nascimento: str = "",
         telefone: str = "",
-        slot_id: Any = None,
+        data: Any = "",
+        hora: Any = "",
+        medico: Any = "",
         email: str = "",
         **_: Any,
     ) -> dict[str, Any]:
@@ -146,10 +193,16 @@ class CriarLeadEConsultaTool(BaseTool):
             raise ToolError("Falta o nome completo do paciente. Pergunte antes de agendar.")
         if not telefone:
             raise ToolError("Falta o telefone de contato. Pergunte antes de agendar.")
-        slot = _slot_id_valido(slot_id)
+        dia, momento = _horario_valido(data, hora)
         if not validar_cpf(cpf):
             raise ToolError(MSG_CPF_INVALIDO)
         nascimento = _nascimento_valido(data_nascimento)
+
+        # A resolução fica **fora** da transação, como o `slot_id` ficava: quem
+        # relê a linha sob lock é o `AgendamentoService`. Perder a corrida entre
+        # esta consulta e o lock não é bug — cai na mesma `AgendamentoError` de
+        # slot ocupado, e o paciente ouve "esse horário acabou de ser ocupado".
+        slot = _resolver_slot(dia, momento, medico)
 
         try:
             # A transação cobre paciente + consulta + lead. Sem ela, um slot que
@@ -166,7 +219,7 @@ class CriarLeadEConsultaTool(BaseTool):
                 )
                 consulta = AgendamentoService.agendar(
                     paciente=paciente,
-                    slot_id=slot,
+                    slot_id=slot.pk,
                     origem=Consulta.Origem.CHAT,
                 )
                 self._fechar_lead(consulta, nome=nome, email=email, telefone=telefone)
@@ -185,7 +238,7 @@ class CriarLeadEConsultaTool(BaseTool):
         logger.info(
             "Chat agendou a consulta %s no slot %s (conversa %s)",
             consulta.pk,
-            slot,
+            slot.pk,
             self._conversa_id,
         )
         return {
@@ -301,21 +354,122 @@ class CriarLeadEConsultaTool(BaseTool):
         )
 
 
-def _slot_id_valido(bruto: Any) -> int:
-    """Converte o ``slot_id`` recebido do modelo em inteiro, ou recusa.
+def _horario_valido(data: Any, hora: Any) -> tuple[dt.date, dt.time]:
+    """Parseia o horário escolhido, ou recusa. Não interpreta nada.
 
-    O ponto desta função é o que ela **não** faz: não interpreta "quinta às
-    15h", não procura por data e hora, não tenta ser prestativa. Ou o valor é o
-    número que ``buscar_slots`` devolveu, ou o agendamento não acontece.
+    O ponto desta função é o que ela **não** faz: não resolve "amanhã", não
+    entende "de manhã", não chuta o ano que falta. Ou vem uma data e uma hora
+    escritas nos formatos que ``buscar_slots`` devolve, ou o agendamento não
+    acontece — é aqui que "quero quinta às 15h" para.
     """
-    # `bool` é subclasse de `int`: sem esta linha, `slot_id=True` viraria o
-    # slot 1 — um horário real, de um paciente real.
-    if bruto is None or isinstance(bruto, bool):
-        raise ToolError(MSG_SLOT_INVALIDO)
-    try:
-        return int(str(bruto).strip())
-    except (TypeError, ValueError):
-        raise ToolError(MSG_SLOT_INVALIDO) from None
+    return _parseado(data, FORMATOS_DATA).date(), _parseado(hora, FORMATOS_HORA).time()
+
+
+def _parseado(bruto: Any, formatos: tuple[str, ...]) -> dt.datetime:
+    """Primeiro formato de :data:`formatos` que casar com ``bruto``."""
+    # `isinstance(bruto, bool)` importa: `True` viraria a string "True" e
+    # falharia, mas deixar explícito documenta que booleano não é horário.
+    texto = "" if isinstance(bruto, bool) else str(bruto or "").strip().lower()
+    for formato in formatos:
+        try:
+            return dt.datetime.strptime(texto, formato)
+        except ValueError:
+            continue
+    raise ToolError(MSG_HORARIO_ILEGIVEL)
+
+
+def _resolver_slot(dia: dt.date, momento: dt.time, medico: Any) -> AgendaSlot:
+    """Encontra a vaga **livre** daquele dia, hora e médico.
+
+    É o que substituiu o ``slot_id`` como identificador `[S5-12]`, e a garantia
+    é a mesma de antes: só existe agendamento se existir linha ``LIVRE`` casando
+    exatamente com o que foi pedido. O filtro por ``status`` e por ``ativo`` é o
+    que impede agendar horário bloqueado, já tomado ou de médico desligado.
+
+    Raises:
+        ToolError: nenhum horário livre naquele instante, médico informado que
+            não é um dos livres, ou horário com mais de um médico livre e
+            nenhum informado. As três mensagens dizem ao modelo o que perguntar
+            em seguida — recusar sem saída faria o turno terminar em desculpa.
+    """
+    livres = list(
+        AgendaSlot.objects.filter(
+            status=AgendaSlot.Status.LIVRE,
+            data=dia,
+            hora_inicio=momento,
+            medico__ativo=True,
+        )
+        .select_related("medico")
+        .order_by("medico__nome")
+    )
+    if not livres:
+        raise ToolError(MSG_HORARIO_INDISPONIVEL)
+
+    procurado = _tokens_nome(medico)
+    if not procurado:
+        if len(livres) == 1:
+            # Horário com um único médico livre: não há o que desambiguar, e
+            # exigir o nome só para repetir a pergunta atrasaria o paciente.
+            return livres[0]
+        raise ToolError(_msg_qual_medico(livres))
+
+    # Duas passadas, da comparação mais estrita para a mais frouxa. "Ana Lima"
+    # e "Dra. Ana Lima" casam por contenção na primeira; "Dra. Ana" casa por
+    # nome compartilhado na segunda. Empate nunca vira escolha: se o nome
+    # informado serve para dois médicos livres, o modelo tem que perguntar.
+    for candidatos in (
+        [s for s in livres if _mesmo_nome(procurado, _tokens_nome(s.medico.nome))],
+        [s for s in livres if procurado & _tokens_nome(s.medico.nome)],
+    ):
+        if len(candidatos) == 1:
+            return candidatos[0]
+        if len(candidatos) > 1:
+            raise ToolError(_msg_qual_medico(candidatos))
+    raise ToolError(_msg_outro_medico(livres))
+
+
+def _tokens_nome(bruto: Any) -> set[str]:
+    """Reduz um nome de médico ao que dá para comparar entre duas grafias.
+
+    Minúsculas, sem acento, sem título e sem preposição: ``"Dra. Ana Lima"`` e
+    ``"ana lima"`` viram o mesmo conjunto. Comparar por conjunto, e não por
+    string, é o que faz "Ana Lima" casar com "Dra. Ana Lima" sem casar "Ana
+    Lima" com "Ana Ribeiro" na primeira passada de :func:`_resolver_slot`.
+    """
+    sem_acento = unicodedata.normalize("NFKD", str(bruto or "")).encode("ascii", "ignore").decode()
+    partes = re.split(r"[^a-z]+", sem_acento.lower())
+    return {p for p in partes if p and p not in TITULOS_MEDICO and p not in LIGACOES_NOME}
+
+
+def _mesmo_nome(informado: set[str], real: set[str]) -> bool:
+    """Um nome contém o outro — a grafia mais curta ainda identifica a pessoa."""
+    return informado <= real or real <= informado
+
+
+def _nomes_de(slots: list[AgendaSlot]) -> str:
+    """Lista de médicos em português, para entrar numa frase de recusa.
+
+    Expor quem está livre não vaza nada: é a mesma informação pública que
+    ``buscar_slots`` devolve. O que nunca aparece nas mensagens é id de linha.
+    """
+    nomes = sorted({s.medico.nome for s in slots})
+    if len(nomes) == 1:
+        return nomes[0]
+    return f"{', '.join(nomes[:-1])} e {nomes[-1]}"
+
+
+def _msg_qual_medico(slots: list[AgendaSlot]) -> str:
+    return (
+        f"Nesse horário atendem {_nomes_de(slots)}. Pergunte ao paciente com qual "
+        "deles ele prefere ser atendido e agende depois da resposta."
+    )
+
+
+def _msg_outro_medico(slots: list[AgendaSlot]) -> str:
+    return (
+        f"Esse médico não atende nesse horário. Quem está livre é {_nomes_de(slots)}. "
+        "Confirme com o paciente antes de agendar."
+    )
 
 
 def _nascimento_valido(bruto: str) -> dt.date:
