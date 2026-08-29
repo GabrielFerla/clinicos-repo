@@ -7,9 +7,11 @@ depois de cada recusa, e o que ela devolve para ser verbalizado.
 Duas classes de teste merecem leitura antes de qualquer alteração aqui:
 
 ``TestRecusaHorarioInventado``
-    A porta que impede o chatbot de agendar um horário que ninguém ofereceu.
-    Se algum dia esses testes começarem a aceitar texto livre no ``slot_id``,
-    o grounding do agendamento acabou.
+    A porta que impede o chatbot de agendar um horário que ninguém ofereceu. A
+    vaga é identificada por data, hora e médico `[S5-12]`, então é aqui que se
+    verifica o que substituiu o antigo ``slot_id``: formato fixo de data e hora,
+    e casamento com uma linha ``LIVRE`` de verdade. Se algum dia esses testes
+    passarem a aceitar "quinta às 15h", o grounding do agendamento acabou.
 
 ``TestNaoDeixaLixo``
     Toda recusa tem que sair sem paciente órfão. Um cadastro criado por um
@@ -75,7 +77,11 @@ def _dados(slot: AgendaSlot, **overrides: object) -> dict[str, object]:
         "cpf": CPF_JOANA,
         "data_nascimento": "17/05/1980",
         "telefone": "(51) 99999-0000",
-        "slot_id": slot.pk,
+        # É assim que o modelo escolhe a vaga: os três campos que ele mostrou ao
+        # paciente. Nenhum id de banco entra no diálogo `[S5-12]`.
+        "data": slot.data.strftime("%d/%m/%Y"),
+        "hora": slot.hora_inicio.strftime("%H:%M"),
+        "medico": slot.medico.nome,
     }
     dados.update(overrides)
     return dados
@@ -223,17 +229,36 @@ class TestLeadDaConversa:
 # ---------------------------------------------------------------------------
 class TestRecusaHorarioInventado:
     @pytest.mark.parametrize(
-        "slot_id",
-        ["quinta às 15h", "amanhã", "", None, True, "9:00", {"data": "amanhã"}],
+        "horario",
+        [
+            {"data": "quinta que vem", "hora": "15:00"},
+            {"data": "amanhã", "hora": "09:00"},
+            {"data": "", "hora": "09:00"},
+            {"data": None, "hora": "09:00"},
+            {"data": True, "hora": "09:00"},
+            {"data": "17/05/2027", "hora": "de manhã"},
+            {"data": "17/05/2027", "hora": ""},
+            {"data": "17/05/2027", "hora": "25:00"},
+        ],
     )
-    def test_slot_id_so_aceita_numero_de_buscar_slots(self, tool, slot, slot_id):
+    def test_data_e_hora_nao_aceitam_texto_livre(self, tool, slot, horario):
+        """Interpretar "amanhã" seria o caminho mais curto para marcar o dia
+        errado em silêncio — e o modelo não tem noção de hoje."""
         with pytest.raises(ToolError):
-            tool.execute(**_dados(slot, slot_id=slot_id))
+            tool.execute(**_dados(slot, **horario))
 
         assert Consulta.objects.count() == 0
 
-    def test_schema_nao_tem_campo_de_data_nem_de_hora(self):
-        """Se um dia existir, o modelo passa a poder marcar o que quiser."""
+    def test_horario_bem_formatado_que_nao_existe_na_agenda_e_recusado(self, tool, slot):
+        """A defesa não é o formato: é a vaga ``LIVRE`` ter que existir."""
+        with pytest.raises(ToolError):
+            tool.execute(**_dados(slot, hora="15:00"))
+
+        assert Consulta.objects.count() == 0
+
+    def test_schema_nao_tem_campo_de_id(self):
+        """O id da vaga saiu do vocabulário do modelo `[S5-12]`: era ele que
+        vazava na conversa e que o modelo chegava a pedir ao paciente."""
         propriedades = CriarLeadEConsultaTool.input_schema["properties"]
 
         assert set(propriedades) == {
@@ -241,25 +266,124 @@ class TestRecusaHorarioInventado:
             "cpf",
             "data_nascimento",
             "telefone",
-            "slot_id",
+            "data",
+            "hora",
+            "medico",
             "email",
         }
-        assert propriedades["slot_id"]["type"] == "integer"
+        assert "slot_id" not in json.dumps(CriarLeadEConsultaTool.input_schema)
+        assert "slot_id" not in CriarLeadEConsultaTool.description
 
     def test_email_e_o_unico_opcional(self):
         obrigatorios = CriarLeadEConsultaTool.input_schema["required"]
 
-        assert set(obrigatorios) == {"nome", "cpf", "data_nascimento", "telefone", "slot_id"}
+        assert set(obrigatorios) == {
+            "nome",
+            "cpf",
+            "data_nascimento",
+            "telefone",
+            "data",
+            "hora",
+            "medico",
+        }
 
     def test_conversa_id_nao_e_argumento_do_modelo(self):
         """Se fosse, uma alucinação (ou uma injeção) mexeria no funil alheio."""
         assert "conversa_id" not in CriarLeadEConsultaTool.input_schema["properties"]
 
-    def test_slot_inexistente_nao_vaza_a_existencia_da_linha(self, tool, slot):
+    def test_recusa_nao_vaza_id_de_linha(self, tool, slot):
         with pytest.raises(ToolError) as erro:
-            tool.execute(**_dados(slot, slot_id=987654))
+            tool.execute(**_dados(slot, hora="15:00"))
 
-        assert "987654" not in str(erro.value)
+        assert str(slot.pk) not in str(erro.value)
+
+    def test_medico_desligado_nao_e_agendavel(self, tool, slot):
+        """Soft delete tem que valer no chat: slot antigo de médico desligado
+        continua ``LIVRE`` na tabela."""
+        slot.medico.ativo = False
+        slot.medico.save(update_fields=["ativo"])
+
+        with pytest.raises(ToolError):
+            tool.execute(**_dados(slot))
+
+        assert Consulta.objects.count() == 0
+
+
+# ---------------------------------------------------------------------------
+# Qual dos médicos daquele horário
+# ---------------------------------------------------------------------------
+class TestEscolhaDoMedico:
+    """Um mesmo horário costuma ter vários médicos livres.
+
+    A lista que o paciente vê é "08:00 com Dr. X" e "08:00 com Dra. Y" — data e
+    hora sozinhas não identificam a vaga. Aqui se verifica que o nome resolve a
+    ambiguidade sem exigir grafia exata, e que empate vira pergunta, nunca
+    escolha do servidor.
+    """
+
+    @pytest.fixture
+    def dupla(self, slot) -> AgendaSlot:
+        """Um segundo médico livre no mesmo dia e hora do ``slot``."""
+        outro = Medico.objects.create(nome="Dr. Bruno Carvalho", crm_numero="54321", crm_uf="RS")
+        MedicoEspecialidade.objects.create(
+            medico=outro, especialidade=Especialidade.objects.get(), principal=True
+        )
+        return AgendaSlot.objects.create(
+            medico=outro,
+            data=slot.data,
+            hora_inicio=slot.hora_inicio,
+            hora_fim=slot.hora_fim,
+        )
+
+    @pytest.mark.parametrize(
+        "informado",
+        ["Ana Ribeiro", "ana ribeiro", "Dra. Ana Ribeiro", "Dra Ana", "Ribeiro", "ANA RIBEIRO"],
+    )
+    def test_nome_casa_com_a_grafia_do_cadastro(self, tool, slot, dupla, informado):
+        """O cadastro tem título ("Dra. Ana Lima") e o modelo reescreve o nome de
+        um jeito diferente a cada turno; perder o agendamento por isso seria caro."""
+        tool.execute(**_dados(slot, medico=informado))
+
+        assert Consulta.objects.get().slot == slot
+
+    def test_medico_unico_no_horario_dispensa_o_nome(self, tool, slot):
+        tool.execute(**_dados(slot, medico=""))
+
+        assert Consulta.objects.get().slot == slot
+
+    def test_horario_com_dois_medicos_e_nenhum_informado_vira_pergunta(self, tool, slot, dupla):
+        with pytest.raises(ToolError) as erro:
+            tool.execute(**_dados(slot, medico=""))
+
+        assert "Ana Ribeiro" in str(erro.value)
+        assert "Bruno Carvalho" in str(erro.value)
+        assert Consulta.objects.count() == 0
+
+    def test_nome_ambiguo_entre_dois_livres_nao_escolhe_por_conta(self, tool, slot):
+        """Duas "Ana" livres no mesmo horário: chutar uma marcaria o paciente
+        com o médico errado, e ele só descobriria na recepção."""
+        outra = Medico.objects.create(nome="Dra. Ana Lima", crm_numero="99999", crm_uf="RS")
+        MedicoEspecialidade.objects.create(
+            medico=outra, especialidade=Especialidade.objects.get(), principal=True
+        )
+        AgendaSlot.objects.create(
+            medico=outra, data=slot.data, hora_inicio=slot.hora_inicio, hora_fim=slot.hora_fim
+        )
+
+        with pytest.raises(ToolError) as erro:
+            tool.execute(**_dados(slot, medico="Dra. Ana"))
+
+        assert "Ana Lima" in str(erro.value)
+        assert Consulta.objects.count() == 0
+
+    def test_medico_que_nao_atende_no_horario_nao_cai_no_que_sobrou(self, tool, slot, dupla):
+        """Sem esta recusa, "quero com a Dra. Ana" agendaria com quem estivesse
+        livre — o paciente ouviria um nome e encontraria outro no balcão."""
+        with pytest.raises(ToolError) as erro:
+            tool.execute(**_dados(slot, medico="Dr. Diego Rocha"))
+
+        assert "Ana Ribeiro" in str(erro.value)
+        assert Consulta.objects.count() == 0
 
 
 # ---------------------------------------------------------------------------

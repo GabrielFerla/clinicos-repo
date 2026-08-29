@@ -135,12 +135,21 @@ class BuscarSlotsTool(BaseTool):
             qs = qs.filter(hora_inicio__gte=faixa[0], hora_inicio__lt=faixa[1])
 
         slots = qs.order_by("data", "hora_inicio")[:MAX_SLOTS]
+        # Sem `slot_id` de propósito `[S5-12]`. A PK do slot já esteve aqui, e o
+        # efeito foi o previsível: o modelo transcrevia o que recebia, então o
+        # paciente lia "08:00 com Dr. Bruno Carvalho (slot_id 431)" e, pior,
+        # era instruído a *informar* o número na resposta seguinte.
+        #
+        # Filtrar o id do texto de saída foi a primeira tentativa e não resolve
+        # a segunda metade do problema: um dado que está no contexto do modelo
+        # entra na conversa de alguma forma. Identificar a vaga por data, hora e
+        # médico — o que o paciente de fato fala — é o que fecha a porta.
+        # Quem traduz isso em PK é o servidor, em `agendamento.py`.
         return {
             "encontrada": True,
             "especialidade": obj.nome,
             "slots": [
                 {
-                    "slot_id": s.pk,
                     "medico": s.medico.nome,
                     "data": s.data.strftime("%d/%m/%Y"),
                     "hora": s.hora_inicio.strftime("%H:%M"),

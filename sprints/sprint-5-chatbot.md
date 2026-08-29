@@ -100,9 +100,10 @@ Ver `docs/STATUS.md` e `docs/CHAT_MVP.md`.
   `consultas.py` — aquele módulo declara na primeira linha que nada ali escreve, e essa
   invariante vale como documentação. O `construir_registry()` subiu para
   `tools/__init__.py`, já que montar o conjunto deixou de ser assunto de um módulo só.
-- **`slot_id` só vem de um `buscar_slots` anterior.** A tool não aceita data/hora em
-  texto livre: é o mesmo princípio do `enum` de especialidades — restringir o vocabulário
-  no schema é a defesa que funciona num modelo pequeno, mais do que instrução no prompt.
+- **A vaga é identificada por data, hora e médico** — quem traduz isso em PK é o
+  servidor, filtrando por `status=LIVRE`. Data e hora passam só nos formatos fixos, então
+  "quinta às 15h" continua não virando consulta. Era `slot_id` cru até 19/08 (ver a nota
+  daquele dia).
 - **O `conversa_id` não passa pelo modelo.** Ele é injetado em `construir_registry()`
   pela view, *depois* de o UUID já ter sido conferido contra a sessão. O modelo não tem
   como forjar de qual conversa é o lead que está sendo fechado.
@@ -119,7 +120,36 @@ Ver `docs/STATUS.md` e `docs/CHAT_MVP.md`.
   - **`detectar_alucinacao` dá falso positivo em toda confirmação** — ver débito #16 do
     `STATUS.md`. Corrompe o sinal que a S5-32 e o risco R4 usam.
   - **O modelo expõe `slot_id` ao paciente** ("08:00 com a Dra. Ana Lima (slot_id 2241)").
-    Não é falha de segurança, mas é id interno vazando na conversa. Ajuste de prompt.
+    Não é falha de segurança, mas é id interno vazando na conversa. Resolvido em 19/08 —
+    ver a nota daquele dia.
+**19/08/2026 — o `slot_id` saiu da conversa `[S5-12]`.** O relato foi a resposta abaixo,
+com o número grudado no nome do médico e um pedido para o paciente informar o id:
+
+```
+- 08:00 com Dr. Bruno Carvalho31)
+- 08:00 com Dra. Ana Lima327)
+Qual horário você prefere? Por favor, escolha um dos horários listados e informe o
+slot_id correspondente.
+```
+
+Duas causas, uma de cada natureza:
+
+- **A tool pedia o id, então o modelo pedia o id.** `criar_lead_e_consulta` tinha
+  `slot_id` obrigatório no schema e `buscar_slots` devolvia o campo. Um dado que está no
+  contexto entra na conversa de alguma forma — filtrar a saída não conserta isso. Agora a
+  vaga é escolhida por `data`, `hora` e `medico`, e o servidor resolve para a PK numa
+  consulta restrita a `LIVRE` (`_resolver_slot`). O nome do médico casa por conjunto de
+  tokens, sem título nem acento, e **empate vira pergunta**: dois médicos livres no mesmo
+  horário com o nome informado ambíguo devolvem "com qual deles?" em vez de escolher.
+- **O filtro de streaming vazava o resto do número.** `_FiltroSlotId` removia a menção
+  no fragmento em que o primeiro dígito chegava, e os dígitos seguintes já não casavam
+  com nada — daí o `31)` solto na tela. A remoção agora só roda no trecho que não pode
+  mais crescer. O filtro fica como rede de segunda linha (o modelo pode inventar a
+  menção sozinho), não como defesa principal.
+
+Verificado com `qwen2.5:14b` real: listagem sem número nenhum ao lado dos nomes, e os
+4 turnos do "quero marcar" até a consulta gravada com o médico e a hora certos.
+
 - **Fora do escopo desta fatia:** S5-4/S5-5, S5-8, S5-11 (triagem), S5-14 (cancelamento),
   S5-18 a S5-21 (anti-abuso), S5-25 (dashboard), S5-28 (custo), S5-29/S5-30 (e-mails),
   S5-31 a S5-33 (E2E e adversariais).

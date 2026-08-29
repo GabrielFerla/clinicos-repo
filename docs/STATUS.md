@@ -103,9 +103,10 @@ As 14 entidades têm tela, com filtro, busca e paginação. O que não é CRUD t
   saem pela mesma `SlotIndisponivelError`, com mensagem exibível ao paciente.
 - **`gerar_slots --dias 60`** — expande as regras semanais respeitando duração,
   intervalo e vigência. Idempotente.
-- **`criar_lead_e_consulta`** — a primeira tool de escrita do chatbot. `slot_id` só vem
-  de um `buscar_slots` anterior; o `conversa_id` é injetado pela view depois de
-  conferido contra a sessão, nunca pelo modelo.
+- **`criar_lead_e_consulta`** — a primeira tool de escrita do chatbot. A vaga é escolhida
+  por `data`, `hora` e `medico` (o que o paciente fala em voz alta) e resolvida pelo
+  servidor contra uma linha `LIVRE`; nenhum id de banco passa pelo modelo. O
+  `conversa_id` é injetado pela view depois de conferido contra a sessão.
 
 **Andaime do projeto (S1-1 a S1-7)**
 

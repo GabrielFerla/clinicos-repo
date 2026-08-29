@@ -57,6 +57,15 @@ class TestBuscarSlots:
         assert [s["hora"] for s in r["slots"]] == ["09:00", "14:00"]
         assert r["slots"][0]["medico"] == "Dra. Ana Lima"
 
+    def test_nao_devolve_id_de_banco_ao_modelo(self, clinica):
+        """O `slot_id` saiu daqui `[S5-12]`: o modelo transcrevia o número para o
+        paciente ("com Dra. Ana Lima (slot_id 431)") e chegava a pedir que ele
+        informasse o id. Quem traduz horário em PK é o servidor, no agendamento."""
+        r = BuscarSlotsTool().execute(especialidade="Retina")
+
+        assert set(r["slots"][0]) == {"medico", "data", "hora"}
+        assert "slot_id" not in json.dumps(r)
+
     def test_filtra_por_periodo(self, clinica):
         r = BuscarSlotsTool().execute(especialidade="Retina", periodo_preferido="tarde")
         assert [s["hora"] for s in r["slots"]] == ["14:00"]
